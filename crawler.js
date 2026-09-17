@@ -34,8 +34,9 @@ function todayParts() {
 }
 
 // 게시글 블록은 "이상호" -> "- 방 송 공 지-" -> "공지..." 로 시작합니다.
+// (사이트가 접속 지역에 따라 영어 UI로 뜨면 "공지" 대신 "Notice"로 나올 수 있어서 둘 다 허용합니다.)
 function splitBlocks(text) {
-  const marker = /이상호\s*\n-\s*방\s*송\s*공\s*지\s*-\s*\n공지/g;
+  const marker = /이상호\s*\n-\s*방\s*송\s*공\s*지\s*-\s*\n(?:공지|Notice)/gi;
   const idxs = [];
   let m;
   while ((m = marker.exec(text))) idxs.push(m.index);
@@ -51,9 +52,9 @@ function splitBlocks(text) {
 function parseBlock(block) {
   const lines = block.split('\n').map((s) => s.trim()).filter(Boolean);
   let idx = 0;
-  while (idx < lines.length && !lines[idx].startsWith('공지')) idx++;
+  while (idx < lines.length && !lines[idx].startsWith('공지') && !/^notice/i.test(lines[idx])) idx++;
   if (idx >= lines.length) return null;
-  const title = lines[idx].replace(/^공지\s*/, '').trim();
+  const title = lines[idx].replace(/^(?:공지|notice)\s*/i, '').trim();
   idx++;
 
   const isNum = (s) => /^[0-9][0-9,]*$/.test(s);
@@ -73,7 +74,7 @@ function parseBlock(block) {
   if (idx < lines.length) {
     const l = lines[idx];
     if (/^\d{4}-\d{2}-\d{2}$/.test(l)) dateInfo = { kind: 'explicit', value: l };
-    else if (/(전|오늘)$/.test(l) && l.length <= 12) dateInfo = { kind: 'relative', value: l };
+    else if ((/(전|오늘)$/.test(l) || /ago$/i.test(l) || /^today$/i.test(l)) && l.length <= 20) dateInfo = { kind: 'relative', value: l };
   }
 
   if (!title) return null;
@@ -106,6 +107,11 @@ async function runCrawl() {
       userAgent:
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
       viewport: { width: 800, height: 1200 },
+      // 클라우드 서버는 해외 IP라 사이트가 영어 UI로 뜨는 경우가 있어서,
+      // 한국어로 렌더링되도록 유도합니다 (그래도 영어로 뜰 경우를 대비해
+      // 파싱 로직도 "공지"/"Notice" 둘 다 인식하도록 해뒀습니다).
+      locale: 'ko-KR',
+      extraHTTPHeaders: { 'Accept-Language': 'ko-KR,ko;q=0.9' },
     });
     const response = await page.goto(BOARD_URL, { waitUntil: 'networkidle', timeout: 30000 });
     await page.waitForTimeout(1500);
