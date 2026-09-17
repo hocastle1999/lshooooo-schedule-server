@@ -1,0 +1,15 @@
+# Render Blueprint — Render 대시보드에서 "New +" → "Blueprint" 로 이 저장소를
+# 연결하면 아래 설정이 자동으로 적용됩니다. (직접 "Web Service"로 만들어도 되고,
+# 그 경우엔 Build/Start Command 칸에 아래 값을 손으로 넣어주면 됩니다.)
+services:
+  - type: web
+    name: lshooooo-schedule-server
+    runtime: node
+    plan: free
+    buildCommand: npm install && npx playwright install --with-deps chromium
+    startCommand: node server.js
+    envVars:
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false

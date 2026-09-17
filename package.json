@@ -1,0 +1,15 @@
+{
+  "name": "lshooooo-schedule-server",
+  "version": "1.0.0",
+  "description": "이상호 방송 일정 캘린더 + 게시판 공지 자동 크롤링 서버",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "postinstall": "playwright install chromium"
+  },
+  "dependencies": {
+    "@upstash/redis": "^1.34.3",
+    "express": "^4.19.2",
+    "playwright": "^1.47.0"
+  }
+}
