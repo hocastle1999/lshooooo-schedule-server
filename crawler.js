@@ -107,7 +107,7 @@ async function runCrawl() {
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
       viewport: { width: 800, height: 1200 },
     });
-    await page.goto(BOARD_URL, { waitUntil: 'networkidle', timeout: 30000 });
+    const response = await page.goto(BOARD_URL, { waitUntil: 'networkidle', timeout: 30000 });
     await page.waitForTimeout(1500);
     // 가상 스크롤 목록이라 스크롤해야 더 많은 글이 렌더링됩니다.
     for (let i = 0; i < 4; i++) {
@@ -116,6 +116,12 @@ async function runCrawl() {
     }
     const text = await page.evaluate(() => document.body.innerText);
     const blocks = splitBlocks(text).slice(0, 15);
+    // 진단용 로그 — 클라우드에서 크롤링이 이상할 때 원인을 로그로 확인하기 위함
+    console.log('[crawler] http status:', response ? response.status() : '(no response)');
+    console.log('[crawler] page title:', await page.title());
+    console.log('[crawler] body text length:', text.length);
+    console.log('[crawler] body text preview:', JSON.stringify(text.slice(0, 300)));
+    console.log('[crawler] blocks found:', blocks.length);
 
     const t = todayParts();
     const todayKey = `${t.y}-${pad(t.m)}-${pad(t.d)}`;
