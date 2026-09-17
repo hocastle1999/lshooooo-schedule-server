@@ -6,7 +6,10 @@ services:
     name: lshooooo-schedule-server
     runtime: node
     plan: free
-    buildCommand: npm install && npx playwright install --with-deps chromium
+    # package.json의 postinstall(`playwright install chromium`)이 npm install
+    # 과정에서 Chromium을 알아서 받아옵니다. `--with-deps`는 root(su) 권한이
+    # 필요해서 Render 빌드 환경에서 막히니 여기 buildCommand에는 넣지 않습니다.
+    buildCommand: npm install
     startCommand: node server.js
     envVars:
       - key: UPSTASH_REDIS_REST_URL
