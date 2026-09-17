@@ -16,3 +16,8 @@ services:
         sync: false
       - key: UPSTASH_REDIS_REST_TOKEN
         sync: false
+      # Render는 빌드 환경과 실행 환경이 분리되어 있어서, 빌드할 때 받은
+      # 크로미움이 기본 위치(홈 디렉터리 캐시)에 있으면 실행 환경으로 안
+      # 넘어갑니다. 0으로 설정하면 node_modules 안쪽에 받아서 같이 배포됩니다.
+      - key: PLAYWRIGHT_BROWSERS_PATH
+        value: "0"
