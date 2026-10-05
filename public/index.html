@@ -264,7 +264,7 @@
           '<button type="button" class="refresh-btn" id="refresh-btn" data-action="refresh">'+(refreshing?'새로고침 중…':'⟳ 공지 새로고침')+'</button>'+
         '</div>'+
       '</div>'+
-      '<div class="layout"><div style="display:flex;flex-direction:column;gap:18px;">'+calendarHTML()+unscheduledHTML()+'</div><div style="display:flex;flex-direction:column;gap:18px;">'+sidebarHTML()+memoHTML()+'</div></div>'+
+      '<div class="layout"><div style="display:flex;flex-direction:column;gap:18px;">'+calendarHTML()+unscheduledHTML()+'</div><div style="display:flex;flex-direction:column;gap:18px;">'+memoHTML()+sidebarHTML()+'</div></div>'+
       '<div id="modal-slot"></div>';
     var btn = document.getElementById('refresh-btn');
     if(btn) btn.disabled = refreshing;
