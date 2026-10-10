@@ -34,7 +34,7 @@ git init
 git add .
 git commit -m "이상호 방송 일정 서버"
 git branch -M main
-git remote add origin https://github.com/<본인아이디>/lshooooo-schedule-server.git
+git remote add origin https://github.com/hocastle1999/lshooooo-schedule-server.git
 git push -u origin main
 ```
 (GitHub에서 미리 빈 저장소를 하나 만들어두고, 그 주소를 `git remote add`에 넣으면 됩니다.

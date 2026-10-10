@@ -96,6 +96,14 @@
   .memo-box:focus{outline:2px solid var(--accent);outline-offset:1px;}
   .memo-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;}
   .memo-saved{font-size:11.5px;color:var(--text-dim);}
+  .file-list{display:flex;flex-direction:column;gap:8px;margin-bottom:10px;}
+  .file-item{border:1px solid var(--border);border-radius:12px;padding:9px 12px;background:var(--surface-2);display:flex;align-items:center;justify-content:space-between;gap:10px;}
+  .file-item .txt{display:flex;flex-direction:column;gap:2px;overflow:hidden;min-width:0;}
+  .file-item .n{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text);text-decoration:none;}
+  .file-item a.n:hover{color:var(--accent);}
+  .file-item .m{font-size:11.5px;color:var(--text-dim);}
+  .file-item .btns{display:flex;gap:4px;flex:none;}
+  .file-input{display:none;}
   .overlay{position:fixed;inset:0;background:rgba(10,12,14,.5);display:flex;align-items:center;justify-content:center;padding:16px;z-index:20;}
   .modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);width:100%;max-width:380px;padding:18px;display:flex;flex-direction:column;gap:12px;max-height:88vh;overflow-y:auto;}
   .modal h3{margin:0;font-size:16px;}
@@ -123,7 +131,7 @@
 <script>
 (function(){
   "use strict";
-  var STATE = { events:{}, notices:[], unscheduled:[], memo:'', meta:{streamer:'이상호', boardUrl:'', crawledAtLabel:''} };
+  var STATE = { events:{}, notices:[], unscheduled:[], memo:'', files:[], meta:{streamer:'이상호', boardUrl:'', crawledAtLabel:''} };
   var LINKS = [
     { label: '🔗 제재내역', url: 'https://www.trackify.kr/soop/lshooooo?tab=sanctions' },
     { label: '🔗 딥롤', url: 'https://www.deeplol.gg/aram?hl=ko' },
@@ -250,6 +258,34 @@
     '</section>';
   }
 
+  function fmtSize(n){
+    if(n<1024) return n+' B';
+    if(n<1024*1024) return (n/1024).toFixed(1)+' KB';
+    return (n/1024/1024).toFixed(1)+' MB';
+  }
+  function fmtFileDate(ts){
+    var d=new Date(ts);
+    return (d.getMonth()+1)+'/'+d.getDate()+' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+  }
+  function filesHTML(){
+    var list = (STATE.files||[]).map(function(f){
+      return '<div class="file-item">'+
+        '<div class="txt"><a class="n" href="/api/files/'+encodeURIComponent(f.id)+'" title="'+esc(f.name)+'">📎 '+esc(f.name)+'</a>'+
+        '<span class="m">'+fmtSize(f.size)+' · '+fmtFileDate(f.uploadedAt)+'</span></div>'+
+        '<div class="btns">'+
+          '<a class="icon-btn" href="/api/files/'+encodeURIComponent(f.id)+'" aria-label="다운로드" title="다운로드" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center;">⬇</a>'+
+          '<button type="button" class="icon-btn" data-action="file-delete" data-id="'+esc(f.id)+'" aria-label="삭제" title="삭제">✕</button>'+
+        '</div></div>';
+    }).join('');
+    return '<section class="card">'+
+      '<h2 style="font-weight:800;font-size:17px;margin:0 0 3px;">첨부 파일</h2>'+
+      '<p class="updated" style="margin:0 0 12px;">작은 파일(이미지, 문서 등)을 올려두고 같이 쓰는 사람이 내려받을 수 있어요. 파일 1개당 최대 5MB.</p>'+
+      '<div class="file-list">'+(list || '<div class="empty">아직 올린 파일이 없어요.</div>')+'</div>'+
+      '<input type="file" id="file-input" class="file-input" multiple>'+
+      '<button type="button" class="btn primary" data-action="file-pick"'+(uploading?' disabled':'')+'>'+(uploading?'올리는 중…':'+ 파일 올리기')+'</button>'+
+    '</section>';
+  }
+
   function render(){
     document.getElementById('app').innerHTML =
       '<div class="top">'+
@@ -264,7 +300,7 @@
           '<button type="button" class="refresh-btn" id="refresh-btn" data-action="refresh">'+(refreshing?'새로고침 중…':'⟳ 공지 새로고침')+'</button>'+
         '</div>'+
       '</div>'+
-      '<div class="layout"><div style="display:flex;flex-direction:column;gap:18px;">'+calendarHTML()+unscheduledHTML()+'</div><div style="display:flex;flex-direction:column;gap:18px;">'+memoHTML()+sidebarHTML()+'</div></div>'+
+      '<div class="layout"><div style="display:flex;flex-direction:column;gap:18px;">'+calendarHTML()+unscheduledHTML()+'</div><div style="display:flex;flex-direction:column;gap:18px;">'+memoHTML()+filesHTML()+sidebarHTML()+'</div></div>'+
       '<div id="modal-slot"></div>';
     var btn = document.getElementById('refresh-btn');
     if(btn) btn.disabled = refreshing;
@@ -300,6 +336,7 @@
     var slot=document.getElementById('modal-slot');
     if(slot) slot.innerHTML='';
   }
+  var uploading = false;
   function toast(msg){
     var t=document.createElement('div');
     t.className='toast'; t.textContent=msg;
@@ -326,6 +363,7 @@
     STATE.notices = data.notices || [];
     STATE.unscheduled = data.unscheduled || [];
     STATE.memo = data.memo || '';
+    STATE.files = data.files || [];
     STATE.meta = data.meta || STATE.meta;
     render();
   }
@@ -361,6 +399,43 @@
       toast('캘린더에 등록했습니다');
     } catch(e){ toast('등록 실패: '+e.message); }
   }
+  var MAX_FILE_BYTES = 5*1024*1024;
+  function readAsBase64(file){
+    return new Promise(function(resolve, reject){
+      var r = new FileReader();
+      r.onload = function(){ var s=String(r.result); resolve(s.slice(s.indexOf(',')+1)); };
+      r.onerror = function(){ reject(new Error('파일을 읽지 못했습니다')); };
+      r.readAsDataURL(file);
+    });
+  }
+  async function uploadFiles(fileList){
+    var files = Array.prototype.slice.call(fileList||[]);
+    if(!files.length) return;
+    uploading = true; render();
+    var ok = 0;
+    for(var i=0;i<files.length;i++){
+      var f = files[i];
+      if(f.size > MAX_FILE_BYTES){ toast('"'+f.name+'" 은(는) 5MB를 넘어서 올릴 수 없어요'); continue; }
+      if(f.size === 0){ toast('"'+f.name+'" 은(는) 빈 파일이에요'); continue; }
+      try {
+        var b64 = await readAsBase64(f);
+        await api('POST', '/api/files', {name:f.name, type:f.type||'application/octet-stream', data:b64});
+        ok++;
+      } catch(e){ toast('업로드 실패 ('+f.name+'): '+e.message); }
+    }
+    uploading = false;
+    try { await loadState(); } catch(e){ render(); }
+    if(ok) toast(ok+'개 파일을 올렸습니다');
+  }
+  async function deleteFile(id){
+    var f = (STATE.files||[]).find(function(x){return x.id===id;});
+    if(!window.confirm('"'+(f?f.name:'이 파일')+'" 을(를) 삭제할까요? 되돌릴 수 없어요.')) return;
+    try {
+      await api('DELETE', '/api/files/'+encodeURIComponent(id));
+      await loadState();
+    } catch(e){ toast('삭제 실패: '+e.message); }
+  }
+
   async function saveMemo(text){
     try {
       await api('POST', '/api/memo', {text:text});
@@ -416,6 +491,8 @@
     if(action==='next-month'){ view.m++; if(view.m>11){view.m=0;view.y++;} render(); return; }
     if(action==='goto-today'){ var d=new Date(); view.y=d.getFullYear(); view.m=d.getMonth(); render(); return; }
     if(action==='refresh'){ doRefresh(); return; }
+    if(action==='file-pick'){ var fi=document.getElementById('file-input'); if(fi) fi.click(); return; }
+    if(action==='file-delete'){ deleteFile(el.getAttribute('data-id')); return; }
     if(action==='open-day'){ openDayModal(el.getAttribute('data-key')); return; }
     if(action==='edit-event'){
       var key=el.getAttribute('data-key'), id=el.getAttribute('data-id');
@@ -442,6 +519,13 @@
     if(action==='tbd-delete'){
       deleteTbd(el.getAttribute('data-id'));
       return;
+    }
+  });
+
+  document.addEventListener('change', function(ev){
+    if(ev.target && ev.target.id==='file-input'){
+      var picked = ev.target.files;
+      uploadFiles(picked);
     }
   });
 
@@ -494,7 +578,7 @@
   setInterval(function(){
     // 일정 입력 중(모달이 열려 있거나 입력창에 타이핑 중)에는 새로고침으로
     // 입력 내용이 날아가지 않도록 건너뜁니다.
-    if(document.querySelector('.overlay')) return;
+    if(uploading || document.querySelector('.overlay')) return;
     var active = document.activeElement;
     if(active && (active.tagName==='INPUT' || active.tagName==='TEXTAREA') && active.value) return;
     loadState();

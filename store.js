@@ -64,4 +64,12 @@ async function setState(key, value) {
   localWrite(key, value);
 }
 
-module.exports = { getState, setState, useRedis };
+async function deleteState(key) {
+  if (useRedis) {
+    try { await redis.del(key); } catch (e) { console.error('[store] Redis 삭제 실패:', e.message); }
+    return;
+  }
+  try { fs.unlinkSync(localFile(key)); } catch (e) { /* 이미 없으면 무시 */ }
+}
+
+module.exports = { getState, setState, deleteState, useRedis };
