@@ -110,6 +110,24 @@
   .file-item .m{font-size:11.5px;color:var(--text-dim);}
   .file-item .btns{display:flex;gap:4px;flex:none;}
   .file-input{display:none;}
+  .wc-list{display:flex;flex-direction:column;gap:6px;max-height:560px;overflow-y:auto;padding-right:2px;}
+  .wc-day{font-size:12px;font-weight:800;color:var(--accent);margin:8px 0 2px;}
+  .wc-day:first-child{margin-top:0;}
+  .wc-day.today{color:var(--warm);}
+  .wc-match{border:1px solid var(--border);border-radius:11px;padding:8px 11px;background:var(--surface-2);display:flex;flex-direction:column;gap:5px;}
+  .wc-meta{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-dim);flex-wrap:wrap;}
+  .wc-badge{font-size:10.5px;border-radius:999px;padding:1px 7px;border:1px solid var(--border);background:var(--surface);}
+  .wc-badge.live{background:#e5484d;border-color:#e5484d;color:#fff;font-weight:700;}
+  .wc-badge.finished{color:var(--text-dim);}
+  .wc-badge.scheduled{color:var(--accent-ink);background:var(--accent-soft);border-color:transparent;}
+  .wc-teams{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:8px;font-size:13.5px;}
+  .wc-teams .t1{text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .wc-teams .t2{text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .wc-teams .sc{font-variant-numeric:tabular-nums;font-weight:800;min-width:46px;text-align:center;color:var(--text);}
+  .wc-teams .sc.vs{font-weight:400;font-size:11.5px;color:var(--text-dim);}
+  .wc-teams .win{font-weight:800;}
+  .wc-teams .lose{color:var(--text-dim);}
+  .wc-teams .tbd{color:var(--text-dim);font-style:italic;}
   .overlay{position:fixed;inset:0;background:rgba(10,12,14,.5);display:flex;align-items:center;justify-content:center;padding:16px;z-index:20;}
   .modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);width:100%;max-width:380px;padding:18px;display:flex;flex-direction:column;gap:12px;max-height:88vh;overflow-y:auto;}
   .modal h3{margin:0;font-size:16px;}
@@ -137,7 +155,7 @@
 <script>
 (function(){
   "use strict";
-  var STATE = { events:{}, notices:[], unscheduled:[], memos:[], files:[], meta:{streamer:'이상호', boardUrl:'', crawledAtLabel:''} };
+  var STATE = { events:{}, notices:[], unscheduled:[], memos:[], files:[], worlds:{matches:[],updatedLabel:'',sourceUrl:''}, meta:{streamer:'이상호', boardUrl:'', crawledAtLabel:''} };
   var LINKS = [
     { label: '🔗 제재내역', url: 'https://www.trackify.kr/soop/lshooooo?tab=sanctions' },
     { label: '🔗 딥롤', url: 'https://www.deeplol.gg/aram?hl=ko' },
@@ -289,6 +307,54 @@
     '</section>';
   }
 
+  var showPastWorlds = false;
+  function wcDayLabel(key){
+    var p = key.split('-');
+    var d = new Date(Number(p[0]), Number(p[1])-1, Number(p[2]));
+    return Number(p[1])+'월 '+Number(p[2])+'일 ('+['일','월','화','수','목','금','토'][d.getDay()]+')';
+  }
+  function worldsHTML(){
+    var w = STATE.worlds || {matches:[]};
+    var all = w.matches || [];
+    var today = todayKey();
+    var list = showPastWorlds ? all : all.filter(function(m){ return m.dateKey >= today; });
+    var pastCount = all.length - all.filter(function(m){ return m.dateKey >= today; }).length;
+    var body = '';
+    if(!all.length){
+      body = '<div class="empty">아직 가져온 일정이 없어요. 위의 "⟳ 공지 새로고침"을 눌러보세요.</div>';
+    } else if(!list.length){
+      body = '<div class="empty">앞으로 예정된 경기가 없어요.</div>';
+    } else {
+      var lastDay = '';
+      body = '<div class="wc-list">'+list.map(function(m){
+        var head = '';
+        if(m.dateKey!==lastDay){
+          lastDay = m.dateKey;
+          head = '<div class="wc-day'+(m.dateKey===today?' today':'')+'">'+esc(wcDayLabel(m.dateKey))+(m.dateKey===today?' · 오늘':'')+'</div>';
+        }
+        var hasScore = m.score1!=null && m.score2!=null;
+        var fin = m.status==='finished' && hasScore;
+        var c1 = fin ? (m.score1>m.score2?'win':(m.score1<m.score2?'lose':'')) : '';
+        var c2 = fin ? (m.score2>m.score1?'win':(m.score2<m.score1?'lose':'')) : '';
+        var badgeText = m.status==='finished'?'종료':(m.status==='live'?'LIVE':(m.status==='postponed'?'연기/취소':'예정'));
+        function nm(t,c){ return '<span class="'+(t==='TBD'?'tbd':c)+'">'+esc(t==='TBD'?'미정':t)+'</span>'; }
+        return head+'<div class="wc-match">'+
+          '<div class="wc-meta"><b style="color:var(--text);">'+esc(m.time)+'</b><span class="wc-badge '+esc(m.status)+'">'+badgeText+'</span><span>'+esc(m.stage)+'</span></div>'+
+          '<div class="wc-teams"><div class="t1">'+nm(m.team1,c1)+'</div>'+
+            '<div class="sc'+(hasScore?'':' vs')+'">'+(hasScore?(m.score1+' : '+m.score2):'vs')+'</div>'+
+            '<div class="t2">'+nm(m.team2,c2)+'</div></div>'+
+        '</div>';
+      }).join('')+'</div>';
+    }
+    return '<section class="card">'+
+      '<h2 style="font-weight:800;font-size:17px;margin:0 0 3px;">롤 월즈 일정 · 결과</h2>'+
+      '<p class="updated" style="margin:0 0 12px;">네이버 e스포츠 일정에서 자동으로 가져옵니다 (한국 시간)'+(w.updatedLabel?' · '+esc(w.updatedLabel):'')+
+        ' · <a href="https://game.naver.com/esports/League_of_Legends/schedule/world_championship" target="_blank" rel="noopener" style="color:var(--accent);">원문 보기</a></p>'+
+      body+
+      (pastCount>0?'<div style="margin-top:10px;"><button type="button" class="btn" data-action="toggle-past-worlds">'+(showPastWorlds?'지난 경기 숨기기':'지난 경기 보기 ('+pastCount+')')+'</button></div>':'')+
+    '</section>';
+  }
+
   function fmtSize(n){
     if(n<1024) return n+' B';
     if(n<1024*1024) return (n/1024).toFixed(1)+' KB';
@@ -331,7 +397,7 @@
           '<button type="button" class="refresh-btn" id="refresh-btn" data-action="refresh">'+(refreshing?'새로고침 중…':'⟳ 공지 새로고침')+'</button>'+
         '</div>'+
       '</div>'+
-      '<div class="layout"><div style="display:flex;flex-direction:column;gap:18px;">'+calendarHTML()+unscheduledHTML()+'</div><div style="display:flex;flex-direction:column;gap:18px;">'+memoHTML()+filesHTML()+sidebarHTML()+'</div></div>'+
+      '<div class="layout"><div style="display:flex;flex-direction:column;gap:18px;">'+calendarHTML()+unscheduledHTML()+worldsHTML()+'</div><div style="display:flex;flex-direction:column;gap:18px;">'+memoHTML()+filesHTML()+sidebarHTML()+'</div></div>'+
       '<div id="modal-slot"></div>';
     var btn = document.getElementById('refresh-btn');
     if(btn) btn.disabled = refreshing;
@@ -395,6 +461,7 @@
     STATE.unscheduled = data.unscheduled || [];
     STATE.memos = data.memos || [];
     STATE.files = data.files || [];
+    STATE.worlds = data.worlds || {matches:[],updatedLabel:'',sourceUrl:''};
     STATE.meta = data.meta || STATE.meta;
     render();
   }
@@ -599,6 +666,7 @@
     if(action==='next-month'){ view.m++; if(view.m>11){view.m=0;view.y++;} render(); return; }
     if(action==='goto-today'){ var d=new Date(); view.y=d.getFullYear(); view.m=d.getMonth(); render(); return; }
     if(action==='refresh'){ doRefresh(); return; }
+    if(action==='toggle-past-worlds'){ showPastWorlds = !showPastWorlds; render(); return; }
     if(action==='memo-tab'){ selectMemo(el.getAttribute('data-id')); return; }
     if(action==='memo-add'){ stashMemoDraft(); openMemoPageModal(null); return; }
     if(action==='memo-rename'){ var mp=(STATE.memos||[]).find(function(x){return x.id===el.getAttribute('data-id');}); if(mp) openMemoPageModal(mp); return; }

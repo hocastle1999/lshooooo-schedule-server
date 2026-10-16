@@ -18,6 +18,7 @@ const CHROME_CANDIDATES = [
 ];
 
 function findChrome() {
+  if (process.env.CHROME_PATH && fs.existsSync(process.env.CHROME_PATH)) return process.env.CHROME_PATH;
   for (const p of CHROME_CANDIDATES) {
     if (fs.existsSync(p)) return p;
   }
@@ -170,4 +171,4 @@ async function runCrawl() {
   }
 }
 
-module.exports = { runCrawl };
+module.exports = { runCrawl, findChrome };
