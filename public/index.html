@@ -95,6 +95,11 @@
   .tbd-add button{flex:none;}
   .memo-box{width:100%;min-height:440px;font:inherit;font-size:13px;line-height:1.6;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);resize:vertical;}
   .memo-box:focus{outline:2px solid var(--accent);outline-offset:1px;}
+  .memo-tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;align-items:center;}
+  .memo-tab{font:inherit;font-size:12.5px;border-radius:999px;padding:5px 12px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-dim);cursor:pointer;}
+  .memo-tab:hover{border-color:var(--accent);color:var(--text);}
+  .memo-tab.active{background:var(--accent);border-color:var(--accent);color:#06231F;font-weight:700;}
+  .memo-tab.add{padding:5px 10px;border-style:dashed;}
   .memo-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;}
   .memo-saved{font-size:11.5px;color:var(--text-dim);}
   .file-list{display:flex;flex-direction:column;gap:8px;margin-bottom:10px;}
@@ -132,7 +137,7 @@
 <script>
 (function(){
   "use strict";
-  var STATE = { events:{}, notices:[], unscheduled:[], memo:'', files:[], meta:{streamer:'이상호', boardUrl:'', crawledAtLabel:''} };
+  var STATE = { events:{}, notices:[], unscheduled:[], memos:[], files:[], meta:{streamer:'이상호', boardUrl:'', crawledAtLabel:''} };
   var LINKS = [
     { label: '🔗 제재내역', url: 'https://www.trackify.kr/soop/lshooooo?tab=sanctions' },
     { label: '🔗 딥롤', url: 'https://www.deeplol.gg/aram?hl=ko' },
@@ -248,14 +253,38 @@
     '</section>';
   }
 
+  var activeMemo = null;
+  var memoDrafts = {};   // 저장 전 입력 중인 내용 (탭을 옮기거나 화면이 다시 그려져도 유지)
+  try { activeMemo = localStorage.getItem('activeMemo'); } catch(e){}
+  function currentMemoPage(){
+    var pages = STATE.memos||[];
+    var p = pages.find(function(x){return x.id===activeMemo;});
+    return p || pages[0] || null;
+  }
   function memoHTML(){
+    var page = currentMemoPage();
+    var tabs = (STATE.memos||[]).map(function(p){
+      return '<button type="button" class="memo-tab'+(page && p.id===page.id?' active':'')+'" data-action="memo-tab" data-id="'+esc(p.id)+'">'+esc(p.title)+'</button>';
+    }).join('')+'<button type="button" class="memo-tab add" data-action="memo-add" title="페이지 추가" aria-label="페이지 추가">＋</button>';
+    var body = '<div class="empty">메모 페이지가 없어요.</div>';
+    if(page){
+      var text = memoDrafts[page.id]!==undefined ? memoDrafts[page.id] : page.text;
+      var dirty = memoDrafts[page.id]!==undefined && memoDrafts[page.id]!==page.text;
+      body = '<form id="memo-form">'+
+        '<input type="hidden" name="id" value="'+esc(page.id)+'">'+
+        '<textarea class="memo-box" name="memo" placeholder="'+esc(page.title)+' 메모를 자유롭게 적어두세요">'+esc(text)+'</textarea>'+
+        '<div class="memo-foot"><span class="memo-saved" id="memo-saved-label">'+(dirty?'저장 안 됨':'')+'</span>'+
+          '<span style="display:flex;gap:6px;">'+
+            '<button type="button" class="btn" data-action="memo-rename" data-id="'+esc(page.id)+'">이름 바꾸기</button>'+
+            '<button type="button" class="btn" data-action="memo-delete" data-id="'+esc(page.id)+'">페이지 삭제</button>'+
+            '<button type="submit" class="btn primary">저장</button>'+
+          '</span></div>'+
+      '</form>';
+    }
     return '<section class="card">'+
-      '<h2 style="font-weight:800;font-size:17px;margin:0 0 3px;">명령어 매크로 및 채팅 공지 메모</h2>'+
-      '<p class="updated" style="margin:0 0 12px;">채팅 명령어 매크로, 방송 중 공지할 내용 등을 자유롭게 적어두는 메모장입니다. 같이 쓰는 사람 모두에게 보입니다.</p>'+
-      '<form id="memo-form">'+
-        '<textarea class="memo-box" name="memo" placeholder="예) !디스코드 → 디스코드 링크: ...&#10;오늘 방송 공지: ...">'+esc(STATE.memo)+'</textarea>'+
-        '<div class="memo-foot"><span class="memo-saved" id="memo-saved-label"></span><button type="submit" class="btn primary">저장</button></div>'+
-      '</form>'+
+      '<h2 style="font-weight:800;font-size:17px;margin:0 0 3px;">메모장</h2>'+
+      '<p class="updated" style="margin:0 0 12px;">일정, CK, 매크로 등 페이지별로 나눠 적어두는 메모장입니다. 같이 쓰는 사람 모두에게 보입니다.</p>'+
+      '<div class="memo-tabs">'+tabs+'</div>'+body+
     '</section>';
   }
 
@@ -363,7 +392,7 @@
     STATE.events = data.events || {};
     STATE.notices = data.notices || [];
     STATE.unscheduled = data.unscheduled || [];
-    STATE.memo = data.memo || '';
+    STATE.memos = data.memos || [];
     STATE.files = data.files || [];
     STATE.meta = data.meta || STATE.meta;
     render();
@@ -437,14 +466,58 @@
     } catch(e){ toast('삭제 실패: '+e.message); }
   }
 
-  async function saveMemo(text){
+  async function saveMemo(id, text){
     try {
-      await api('POST', '/api/memo', {text:text});
-      STATE.memo = text;
+      var r = await api('POST', '/api/memos/'+encodeURIComponent(id), {text:text});
+      STATE.memos = r.memos || STATE.memos;
+      delete memoDrafts[id];
       var label = document.getElementById('memo-saved-label');
       if(label){ label.textContent = '저장됨 '+new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}); }
       toast('메모를 저장했습니다');
     } catch(e){ toast('저장 실패: '+e.message); }
+  }
+  function stashMemoDraft(){
+    var ta = document.querySelector('#memo-form .memo-box');
+    var idEl = document.querySelector('#memo-form input[name=id]');
+    if(ta && idEl){
+      var p = (STATE.memos||[]).find(function(x){return x.id===idEl.value;});
+      if(p && ta.value!==p.text) memoDrafts[p.id]=ta.value; else delete memoDrafts[idEl.value];
+    }
+  }
+  function selectMemo(id){
+    stashMemoDraft();
+    activeMemo = id;
+    try { localStorage.setItem('activeMemo', id); } catch(e){}
+    render();
+  }
+  function openMemoPageModal(page){
+    var f = page || {title:''};
+    showModal('<h3>'+(page?'페이지 이름 바꾸기':'메모 페이지 추가')+'</h3>'+
+      '<form id="memo-page-form" class="field" style="gap:10px;">'+
+        '<div class="field"><label>페이지 이름 (최대 20자)</label><input type="text" name="title" maxlength="20" value="'+esc(f.title)+'" placeholder="예: 일정" required></div>'+
+        '<div class="modal-actions" style="justify-content:flex-end;"><button type="submit" class="btn primary">'+(page?'저장':'추가')+'</button></div>'+
+        (page?'<input type="hidden" name="id" value="'+esc(page.id)+'">':'')+
+      '</form>'+
+      '<div class="modal-actions"><button type="button" class="btn" data-action="close-modal">닫기</button><span></span></div>', '');
+  }
+  async function saveMemoPage(id, title){
+    try {
+      var r = id ? await api('POST', '/api/memos/'+encodeURIComponent(id), {title:title})
+                 : await api('POST', '/api/memos', {title:title});
+      STATE.memos = r.memos || STATE.memos;
+      if(!id && r.id){ activeMemo = r.id; try { localStorage.setItem('activeMemo', r.id); } catch(e){} }
+      render();
+    } catch(e){ toast('저장 실패: '+e.message); }
+  }
+  async function deleteMemoPage(id){
+    var p = (STATE.memos||[]).find(function(x){return x.id===id;});
+    if(!window.confirm('"'+(p?p.title:'이 페이지')+'" 페이지와 안의 메모를 삭제할까요? 되돌릴 수 없어요.')) return;
+    try {
+      var r = await api('DELETE', '/api/memos/'+encodeURIComponent(id));
+      STATE.memos = r.memos || STATE.memos;
+      delete memoDrafts[id];
+      render();
+    } catch(e){ toast('삭제 실패: '+e.message); }
   }
 
   function openTbdFormModal(item){
@@ -492,6 +565,10 @@
     if(action==='next-month'){ view.m++; if(view.m>11){view.m=0;view.y++;} render(); return; }
     if(action==='goto-today'){ var d=new Date(); view.y=d.getFullYear(); view.m=d.getMonth(); render(); return; }
     if(action==='refresh'){ doRefresh(); return; }
+    if(action==='memo-tab'){ selectMemo(el.getAttribute('data-id')); return; }
+    if(action==='memo-add'){ stashMemoDraft(); openMemoPageModal(null); return; }
+    if(action==='memo-rename'){ var mp=(STATE.memos||[]).find(function(x){return x.id===el.getAttribute('data-id');}); if(mp) openMemoPageModal(mp); return; }
+    if(action==='memo-delete'){ deleteMemoPage(el.getAttribute('data-id')); return; }
     if(action==='file-pick'){ var fi=document.getElementById('file-input'); if(fi) fi.click(); return; }
     if(action==='file-delete'){ deleteFile(el.getAttribute('data-id')); return; }
     if(action==='open-day'){ openDayModal(el.getAttribute('data-key')); return; }
@@ -520,6 +597,15 @@
     if(action==='tbd-delete'){
       deleteTbd(el.getAttribute('data-id'));
       return;
+    }
+  });
+
+  document.addEventListener('input', function(ev){
+    if(ev.target && ev.target.classList && ev.target.classList.contains('memo-box')){
+      stashMemoDraft();
+      var label = document.getElementById('memo-saved-label');
+      var idEl = document.querySelector('#memo-form input[name=id]');
+      if(label && idEl) label.textContent = memoDrafts[idEl.value]!==undefined ? '저장 안 됨' : '';
     }
   });
 
@@ -570,7 +656,17 @@
     if(memoForm){
       ev.preventDefault();
       var fd5 = new FormData(memoForm);
-      saveMemo(fd5.get('memo')||'');
+      saveMemo(fd5.get('id'), fd5.get('memo')||'');
+      return;
+    }
+    var memoPageForm = ev.target.closest('#memo-page-form');
+    if(memoPageForm){
+      ev.preventDefault();
+      var fd6 = new FormData(memoPageForm);
+      var t6 = (fd6.get('title')||'').trim();
+      if(!t6) return;
+      closeModal();
+      saveMemoPage(fd6.get('id')||null, t6);
       return;
     }
   });

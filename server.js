@@ -24,25 +24,78 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/api/state', async (req, res) => {
-  const [events, notices, unscheduled, memo, meta, files] = await Promise.all([
+  const [events, notices, unscheduled, memos, meta, files] = await Promise.all([
     getState('events', {}),
     getState('notices', []),
     getState('unscheduled', []),
-    getState('memo', ''),
+    loadMemos(),
     getState('meta', DEFAULT_META),
     getState('files', []),
   ]);
   // files에는 이름/크기/날짜 같은 목록 정보만 있고, 파일 내용 자체는 따로 저장되어 있습니다
   // (20초마다 이 API를 부르기 때문에 파일 내용을 같이 보내면 안 됩니다).
-  res.json({ events, notices, unscheduled, memo, meta, files });
+  res.json({ events, notices, unscheduled, memos, meta, files });
 });
 
-// 명령어 매크로 및 채팅 공지 메모 (자유 텍스트)
-app.post('/api/memo', async (req, res) => {
-  const { text } = req.body || {};
-  const memo = typeof text === 'string' ? text : '';
-  await setState('memo', memo);
-  res.json({ ok: true, memo });
+// ---- 메모장 (여러 페이지) ----
+// memos = [{ id, title, text }]  — 탭으로 나뉜 메모 페이지들.
+// 예전 단일 메모('memo')가 있으면 첫 로딩 때 '매크로' 페이지로 옮겨줍니다.
+const MAX_MEMO_PAGES = 12;
+const MAX_MEMO_CHARS = 100000;
+function newMemoId() { return 'm' + Date.now() + '-' + Math.random().toString(36).slice(2, 7); }
+async function loadMemos() {
+  let memos = await getState('memos', null);
+  if (Array.isArray(memos) && memos.length) return memos;
+  const legacy = await getState('memo', '');
+  memos = [
+    { id: newMemoId(), title: '일정', text: '' },
+    { id: newMemoId(), title: 'CK', text: '' },
+    { id: newMemoId(), title: '매크로', text: typeof legacy === 'string' ? legacy : '' },
+    { id: newMemoId(), title: '기타', text: '' },
+  ];
+  await setState('memos', memos);
+  return memos;
+}
+function cleanTitle(t) { return String(t == null ? '' : t).trim().slice(0, 20); }
+
+app.post('/api/memos', async (req, res) => {
+  const title = cleanTitle((req.body || {}).title);
+  if (!title) return res.status(400).json({ error: '페이지 이름을 입력해주세요' });
+  const memos = await loadMemos();
+  if (memos.length >= MAX_MEMO_PAGES) return res.status(400).json({ error: '페이지는 최대 ' + MAX_MEMO_PAGES + '개까지 만들 수 있어요' });
+  const page = { id: newMemoId(), title, text: '' };
+  memos.push(page);
+  await setState('memos', memos);
+  res.json({ ok: true, memos, id: page.id });
+});
+
+// 한 페이지의 내용 또는 이름만 수정 (다른 사람이 쓰는 다른 페이지는 건드리지 않음)
+app.post('/api/memos/:id', async (req, res) => {
+  const { id } = req.params;
+  const { text, title } = req.body || {};
+  const memos = await loadMemos();
+  const page = memos.find((m) => m.id === id);
+  if (!page) return res.status(404).json({ error: '해당 페이지를 찾을 수 없습니다' });
+  if (typeof text === 'string') {
+    if (text.length > MAX_MEMO_CHARS) return res.status(413).json({ error: '메모가 너무 깁니다' });
+    page.text = text;
+  }
+  if (title !== undefined) {
+    const t = cleanTitle(title);
+    if (!t) return res.status(400).json({ error: '페이지 이름을 입력해주세요' });
+    page.title = t;
+  }
+  await setState('memos', memos);
+  res.json({ ok: true, memos });
+});
+
+app.delete('/api/memos/:id', async (req, res) => {
+  const { id } = req.params;
+  const memos = await loadMemos();
+  if (memos.length <= 1) return res.status(400).json({ error: '마지막 페이지는 삭제할 수 없어요' });
+  const next = memos.filter((m) => m.id !== id);
+  await setState('memos', next);
+  res.json({ ok: true, memos: next });
 });
 
 // 날짜가 아직 정해지지 않은 일정(TBD) 목록
