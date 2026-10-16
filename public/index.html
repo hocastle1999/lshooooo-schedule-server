@@ -273,7 +273,7 @@
       body = '<form id="memo-form">'+
         '<input type="hidden" name="id" value="'+esc(page.id)+'">'+
         '<textarea class="memo-box" name="memo" placeholder="'+esc(page.title)+' 메모를 자유롭게 적어두세요">'+esc(text)+'</textarea>'+
-        '<div class="memo-foot"><span class="memo-saved" id="memo-saved-label">'+(dirty?'저장 안 됨':'')+'</span>'+
+        '<div class="memo-foot"><span class="memo-saved" id="memo-saved-label">'+(dirty?'입력 중… (자동 저장)':'')+'</span>'+
           '<span style="display:flex;gap:6px;">'+
             '<button type="button" class="btn" data-action="memo-rename" data-id="'+esc(page.id)+'">이름 바꾸기</button>'+
             '<button type="button" class="btn" data-action="memo-delete" data-id="'+esc(page.id)+'">페이지 삭제</button>'+
@@ -466,15 +466,41 @@
     } catch(e){ toast('삭제 실패: '+e.message); }
   }
 
-  async function saveMemo(id, text){
+  var memoTimers = {};
+  function memoLabelFor(id, text){
+    var idEl = document.querySelector('#memo-form input[name=id]');
+    var label = document.getElementById('memo-saved-label');
+    if(label && idEl && idEl.value===id) label.textContent = text;
+  }
+  // silent=true 는 자동 저장 (토스트 없이 조용히 저장)
+  async function saveMemo(id, text, silent){
+    clearTimeout(memoTimers[id]); delete memoTimers[id];
+    memoLabelFor(id, '저장 중…');
     try {
       var r = await api('POST', '/api/memos/'+encodeURIComponent(id), {text:text});
       STATE.memos = r.memos || STATE.memos;
-      delete memoDrafts[id];
-      var label = document.getElementById('memo-saved-label');
-      if(label){ label.textContent = '저장됨 '+new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}); }
-      toast('메모를 저장했습니다');
-    } catch(e){ toast('저장 실패: '+e.message); }
+      // 저장하는 사이에 더 입력했다면 그 내용은 초안으로 남겨둠
+      if(memoDrafts[id]===text) delete memoDrafts[id];
+      memoLabelFor(id, memoDrafts[id]!==undefined ? '저장 안 됨' : (silent?'자동 저장됨 ':'저장됨 ')+new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}));
+      if(!silent) toast('메모를 저장했습니다');
+    } catch(e){
+      memoLabelFor(id, '저장 실패 — 다시 시도 중');
+      toast('저장 실패: '+e.message);
+      scheduleMemoAutosave(id, 5000);
+    }
+  }
+  function scheduleMemoAutosave(id, delay){
+    clearTimeout(memoTimers[id]);
+    memoTimers[id] = setTimeout(function(){
+      delete memoTimers[id];
+      if(memoDrafts[id]!==undefined) saveMemo(id, memoDrafts[id], true);
+    }, delay||1500);
+  }
+  // 탭을 옮기기 전에 저장 안 된 내용이 있으면 바로 저장
+  function flushMemoDrafts(){
+    Object.keys(memoDrafts).forEach(function(id){
+      saveMemo(id, memoDrafts[id], true);
+    });
   }
   function stashMemoDraft(){
     var ta = document.querySelector('#memo-form .memo-box');
@@ -486,6 +512,7 @@
   }
   function selectMemo(id){
     stashMemoDraft();
+    flushMemoDrafts();
     activeMemo = id;
     try { localStorage.setItem('activeMemo', id); } catch(e){}
     render();
@@ -605,7 +632,8 @@
       stashMemoDraft();
       var label = document.getElementById('memo-saved-label');
       var idEl = document.querySelector('#memo-form input[name=id]');
-      if(label && idEl) label.textContent = memoDrafts[idEl.value]!==undefined ? '저장 안 됨' : '';
+      if(label && idEl) label.textContent = memoDrafts[idEl.value]!==undefined ? '입력 중… (자동 저장)' : '';
+      if(idEl && memoDrafts[idEl.value]!==undefined) scheduleMemoAutosave(idEl.value);
     }
   });
 
@@ -656,7 +684,7 @@
     if(memoForm){
       ev.preventDefault();
       var fd5 = new FormData(memoForm);
-      saveMemo(fd5.get('id'), fd5.get('memo')||'');
+      saveMemo(fd5.get('id'), fd5.get('memo')||'', false);
       return;
     }
     var memoPageForm = ev.target.closest('#memo-page-form');
@@ -669,6 +697,16 @@
       saveMemoPage(fd6.get('id')||null, t6);
       return;
     }
+  });
+
+  window.addEventListener('beforeunload', function(){
+    stashMemoDraft();
+    Object.keys(memoDrafts).forEach(function(id){
+      try {
+        fetch('/api/memos/'+encodeURIComponent(id), {method:'POST', keepalive:true,
+          headers:{'Content-Type':'application/json'}, body:JSON.stringify({text:memoDrafts[id]})});
+      } catch(e){}
+    });
   });
 
   loadState();
