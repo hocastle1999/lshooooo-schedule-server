@@ -32,6 +32,9 @@ roulette.mount(app);
 watch.mount(app);
 broadcasts.mount(app);
 
+// 방송 참여 중 매니저만 따로 (작업실 화면이 5초마다 부른다)
+app.get('/api/managers', (req, res) => res.json(watch.managers()));
+
 app.get('/api/state', async (req, res) => {
   const [events, notices, unscheduled, memos, meta, files, worlds] = await Promise.all([
     getState('events', {}),

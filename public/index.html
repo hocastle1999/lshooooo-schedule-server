@@ -952,6 +952,15 @@
   });
 
   loadState();
+  // 방송 참여 중 매니저는 5초마다 따로 받아와서 그 칸만 다시 그린다
+  // (화면 전체를 다시 그리지 않으므로 일정·메모 입력 중이어도 괜찮다).
+  setInterval(async function(){
+    try {
+      STATE.managers = await api('GET', '/api/managers');
+      var row = document.querySelector('.mgr-row');
+      if(row) row.innerHTML = managersHTML();
+    } catch(e){}
+  }, 5000);
   setInterval(function(){
     // 일정 입력 중(모달이 열려 있거나 입력창에 타이핑 중)에는 새로고침으로
     // 입력 내용이 날아가지 않도록 건너뜁니다.
