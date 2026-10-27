@@ -92,6 +92,22 @@
   .copy{font:inherit;color:inherit;background:none;border:1px dashed transparent;border-radius:6px;padding:1px 4px;margin:-1px -2px;cursor:copy;}
   .copy:hover{border-color:var(--accent);color:var(--accent);}
   .copy.done{border-color:var(--ok);color:var(--ok);}
+  .wheel-wrap{display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:18px;align-items:start;}
+  @media (max-width:700px){.wheel-wrap{grid-template-columns:1fr;}}
+  .wheel-box{position:relative;width:100%;max-width:440px;margin:0 auto;aspect-ratio:1;}
+  .wheel-box canvas{width:100%;height:100%;display:block;}
+  .wheel-pin{position:absolute;left:50%;top:-6px;transform:translateX(-50%);width:0;height:0;border-left:14px solid transparent;border-right:14px solid transparent;border-top:26px solid var(--danger);filter:drop-shadow(0 2px 2px rgba(0,0,0,.35));z-index:2;}
+  .wheel-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--text-dim);font-size:13px;padding:30px;}
+  .wheel-side{display:flex;flex-direction:column;gap:10px;}
+  .spin-btn{width:100%;justify-content:center;padding:12px;background:var(--accent);border-color:var(--accent);color:#fff;font-size:15px;}
+  .spin-btn:hover{color:#fff;filter:brightness(1.08);}
+  .winner{border:1px solid var(--accent);background:var(--accent-soft);color:var(--accent-ink);border-radius:12px;padding:12px;text-align:center;}
+  .winner .lbl{font-size:12px;font-weight:700;opacity:.8;}
+  .winner .who{font-size:18px;font-weight:800;margin-top:4px;word-break:break-all;}
+  .wheel-opt{display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;}
+  .wheel-opt input{width:15px;height:15px;margin:0;accent-color:var(--accent);}
+  .wheel-hist{font-size:12.5px;color:var(--text-dim);display:flex;flex-direction:column;gap:4px;max-height:180px;overflow-y:auto;}
+  .wheel-hist b{color:var(--text);}
   .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--text);color:var(--bg);font-size:13px;font-weight:600;padding:9px 16px;border-radius:999px;box-shadow:var(--shadow);z-index:30;pointer-events:none;}
   .head-actions{margin-left:auto;display:flex;gap:6px;}
   .head-actions .btn{padding:5px 10px;font-size:12px;}
@@ -163,6 +179,25 @@
           <span class="copied" id="copied">복사됐습니다!</span>
         </div>
         <div class="hint">명단을 복사한 뒤 <a href="https://lazygyu.github.io/roulette" target="_blank" rel="noopener noreferrer">lazygyu.github.io/roulette</a> 이름 입력창에 붙여넣으세요. <b>*숫자</b>만큼 당첨 확률이 올라갑니다. 위 표의 닉네임이나 아이디를 누르면 그 사람만 복사돼요.</div>
+      </section>
+
+      <section class="card">
+        <h2>룰렛 돌리기 <span class="badge" id="wheelBadge">0명</span></h2>
+        <div class="wheel-wrap">
+          <div class="wheel-box">
+            <div class="wheel-pin"></div>
+            <canvas id="wheel" width="880" height="880"></canvas>
+            <div class="wheel-empty" id="wheelEmpty">후원이 들어오면 룰렛 명단대로 칸이 생깁니다.</div>
+          </div>
+          <div class="wheel-side">
+            <button class="btn spin-btn" id="spinBtn">돌리기</button>
+            <label class="wheel-opt"><input type="checkbox" id="excludeWon">당첨된 사람은 다음 판에서 빼기</label>
+            <div class="winner" id="winnerBox" hidden><div class="lbl">🎉 당첨</div><div class="who" id="winnerName"></div></div>
+            <div class="wheel-hist" id="wheelHist"></div>
+            <button class="btn" id="clearWonBtn" hidden>당첨 기록 지우기</button>
+          </div>
+        </div>
+        <div class="hint">룰렛 명단의 <b>*숫자</b>만큼 칸이 넓어져서 당첨 확률이 올라갑니다. 돌리기는 이 화면에서만 돌아가요 (다른 매니저 화면에는 안 보임).</div>
       </section>
     </div>
   </div>
@@ -249,6 +284,7 @@
     }).join('') : '<tr class="empty"><td colspan="7">아직 후원 기록이 없습니다.</td></tr>';
 
     if (document.activeElement !== listEl) listEl.value = d.rouletteText;
+    wheel.setList(d.rouletteText);
   }
 
   async function poll(){
@@ -316,6 +352,130 @@
     $('copied').classList.add('show');
     setTimeout(function(){ $('copied').classList.remove('show'); }, 1200);
   });
+
+  // ---- 룰렛 돌리기 (돌림판) ----
+  // 룰렛 명단("닉네임(아이디)*배수,...")을 그대로 읽어서 배수만큼 넓은 칸을 만든다.
+  // 당첨자는 먼저 무작위(가중치)로 뽑고, 판이 그 칸에 멈추도록 돌린다.
+  var wheel = (function(){
+    var canvas = $('wheel'), ctx = canvas.getContext('2d'), SIZE = canvas.width, R = SIZE/2;
+    var COLORS = ['#0E9C8A','#E08A2C','#5B7CE0','#C24545','#8B5CF6','#1F9D55','#D9A21B','#E05BA0','#2B8FB3','#7A8C3A'];
+    var listText = null, items = [], angle = 0, spinning = false;
+    var won = [], wonSet = {};
+    try { won = JSON.parse(localStorage.getItem('wheel-won') || '[]'); } catch(e) {}
+    won.forEach(function(w){ wonSet[w.name] = true; });
+    try { $('excludeWon').checked = localStorage.getItem('wheel-exclude') === '1'; } catch(e) {}
+
+    function parse(text){
+      return String(text||'').split(/[,\n]/).map(function(x){ return x.trim(); }).filter(Boolean).map(function(x){
+        var m = x.match(/^(.*)\*(\d+)$/);
+        return m ? { name: m[1].trim(), weight: Math.max(1, parseInt(m[2],10)) } : { name: x, weight: 1 };
+      }).filter(function(it){ return it.name; });
+    }
+    function rebuild(){
+      var all = parse(listText);
+      items = $('excludeWon').checked ? all.filter(function(it){ return !wonSet[it.name]; }) : all;
+      $('wheelBadge').textContent = items.length + '명';
+      $('wheelEmpty').hidden = items.length > 0;
+      $('spinBtn').disabled = spinning || items.length < 1;
+      draw();
+    }
+    function total(){ return items.reduce(function(s, it){ return s + it.weight; }, 0); }
+    function draw(){
+      ctx.clearRect(0, 0, SIZE, SIZE);
+      if (!items.length) return;
+      var sum = total(), a = angle - Math.PI/2; // 0 = 위쪽 바늘
+      var dark = matchMedia('(prefers-color-scheme: dark)').matches;
+      items.forEach(function(it, i){
+        var span = it.weight / sum * Math.PI * 2;
+        ctx.beginPath(); ctx.moveTo(R, R); ctx.arc(R, R, R - 8, a, a + span); ctx.closePath();
+        ctx.fillStyle = COLORS[i % COLORS.length]; ctx.fill();
+        ctx.strokeStyle = dark ? '#191E24' : '#FFFFFF'; ctx.lineWidth = items.length > 60 ? 1 : 3; ctx.stroke();
+        // 칸이 충분히 넓을 때만 이름을 쓴다
+        if (span > 0.06) {
+          ctx.save(); ctx.translate(R, R); ctx.rotate(a + span/2);
+          ctx.fillStyle = '#FFFFFF'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+          var fs = Math.max(16, Math.min(34, span * 120));
+          ctx.font = '700 ' + fs + 'px "Gothic A1","Malgun Gothic",sans-serif';
+          var label = it.name.replace(/\(.*\)$/, '');
+          if (label.length > 10) label = label.slice(0, 9) + '…';
+          ctx.fillText(label + (it.weight > 1 ? ' ×' + it.weight : ''), R - 28, 0);
+          ctx.restore();
+        }
+        a += span;
+      });
+      ctx.beginPath(); ctx.arc(R, R, 46, 0, Math.PI*2);
+      ctx.fillStyle = dark ? '#191E24' : '#FFFFFF'; ctx.fill();
+      ctx.lineWidth = 6; ctx.strokeStyle = dark ? '#2B333C' : '#DADDD8'; ctx.stroke();
+    }
+    function randomUnit(){
+      var b = new Uint32Array(1); crypto.getRandomValues(b); return b[0] / 4294967296;
+    }
+    function spin(){
+      if (spinning || !items.length) return;
+      spinning = true; $('spinBtn').disabled = true; $('winnerBox').hidden = true;
+      var sum = total(), r = randomUnit() * sum, idx = 0, start = 0;
+      for (; idx < items.length; idx++) { if (r < start + items[idx].weight) break; start += items[idx].weight; }
+      if (idx >= items.length) { idx = items.length - 1; start = sum - items[idx].weight; }
+      var winner = items[idx];
+      // 당첨 칸 안의 아무 지점이 바늘(위쪽) 아래에 오도록 최종 각도를 정한다
+      var inside = (start + winner.weight * (0.1 + 0.8 * randomUnit())) / sum * Math.PI * 2;
+      var from = angle, turns = 6 + Math.floor(randomUnit() * 3);
+      var to = -inside;
+      while (to > from - Math.PI * 2 * turns) to -= Math.PI * 2;
+      var dur = 5200, t0 = performance.now();
+      function frame(now){
+        var t = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - t, 4);
+        angle = from + (to - from) * e; draw();
+        if (t < 1) return requestAnimationFrame(frame);
+        angle = ((angle % (Math.PI*2)) + Math.PI*2) % (Math.PI*2);
+        spinning = false;
+        $('winnerName').innerHTML = '<button type="button" class="copy" data-wcopy="' + esc(winner.name) + '" title="복사">' + esc(winner.name) + '</button>';
+        $('winnerBox').hidden = false;
+        won.unshift({ name: winner.name, at: Date.now() }); won = won.slice(0, 30); wonSet[winner.name] = true;
+        try { localStorage.setItem('wheel-won', JSON.stringify(won)); } catch(e) {}
+        paintHist();
+        if ($('excludeWon').checked) setTimeout(rebuild, 1500); else rebuild();
+      }
+      requestAnimationFrame(frame);
+    }
+    function paintHist(){
+      $('wheelHist').innerHTML = won.map(function(w, i){
+        var d = new Date(w.at);
+        return '<div>' + (won.length - i) + '. <b>' + esc(w.name) + '</b> · ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') + '</div>';
+      }).join('');
+      $('clearWonBtn').hidden = !won.length;
+    }
+
+    $('spinBtn').addEventListener('click', spin);
+    $('excludeWon').addEventListener('change', function(){
+      try { localStorage.setItem('wheel-exclude', this.checked ? '1' : '0'); } catch(e) {}
+      if (!spinning) rebuild();
+    });
+    $('clearWonBtn').addEventListener('click', function(){
+      if (!confirm('당첨 기록을 지울까요? (당첨자 빼기도 처음부터 다시 적용돼요)')) return;
+      won = []; wonSet = {};
+      try { localStorage.removeItem('wheel-won'); } catch(e) {}
+      paintHist(); $('winnerBox').hidden = true;
+      if (!spinning) rebuild();
+    });
+    $('winnerBox').addEventListener('click', function(e){
+      var b = e.target.closest('[data-wcopy]'); if (!b) return;
+      var text = b.getAttribute('data-wcopy');
+      navigator.clipboard.writeText(text).catch(function(){});
+      toast('“' + text + '” 복사했어요');
+    });
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
+    paintHist();
+
+    return {
+      // 명단이 바뀌면 칸을 다시 만든다 (돌아가는 중에는 다 돌고 나서)
+      setList: function(text){
+        if (text === listText) return;
+        listText = text;
+        if (!spinning) rebuild();
+      }
+    };
+  })();
 
   poll();
 })();
