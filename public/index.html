@@ -153,6 +153,7 @@
 </head>
 <body>
 <div id="app"><div style="padding:40px;text-align:center;color:var(--text-dim);">불러오는 중…</div></div>
+<script src="/presence-client.js" data-page="main"></script>
 <script>
 (function(){
   "use strict";
@@ -395,6 +396,9 @@
           '<h1>'+esc(STATE.meta.streamer)+' 매니저 작업실</h1>'+
           '<p>방송 일정과 공지, 메모, 방송 도구를 한곳에서 같이 관리해요.</p>'+
         '</div>'+
+        '<div id="presence"></div>'+
+      '</div>'+
+      '<div class="top">'+
         '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">'+
           '<span class="status-pill">함께 편집 가능</span>'+
           LINKS.map(function(l){ return '<a class="refresh-btn" href="'+esc(l.url)+'" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center;">'+esc(l.label)+'</a>'; }).join('')+
@@ -405,6 +409,7 @@
       '<div id="modal-slot"></div>';
     var btn = document.getElementById('refresh-btn');
     if(btn) btn.disabled = refreshing;
+    if(window.Presence) window.Presence.paint();
   }
 
   function openDayModal(key, prefill){
