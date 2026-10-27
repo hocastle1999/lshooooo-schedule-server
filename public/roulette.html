@@ -90,6 +90,10 @@
   .copied.show{opacity:1;}
   .head-actions{margin-left:auto;display:flex;gap:6px;}
   .head-actions .btn{padding:5px 10px;font-size:12px;}
+  .sort{display:inline-flex;border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+  .sort button{border:none;background:var(--surface-2);color:var(--text-dim);font-size:12px;font-weight:600;padding:5px 10px;}
+  .sort button+button{border-left:1px solid var(--border);}
+  .sort button.on{background:var(--accent-soft);color:var(--accent-ink);font-weight:800;}
 </style>
 </head>
 <body>
@@ -129,6 +133,7 @@
       <section class="card">
         <h2>실시간 후원 현황 <span class="badge" id="countBadge">0명</span>
           <span class="head-actions">
+            <span class="sort" id="sortBox"><button type="button" data-sort="recent">최신순</button><button type="button" data-sort="count">개수순</button></span>
             <a class="btn" href="/api/roulette/log.csv">후원 기록 받기</a>
             <button class="btn btn-danger" id="resetBtn">초기화</button>
           </span>
@@ -166,6 +171,19 @@
   var streamerEl=$('streamer'), unitEl=$('unit'), bonusEl=$('bonus'), checksEl=$('checks');
   var toggleBtn=$('toggleBtn'), errorBox=$('errorBox'), listEl=$('list');
   var current = null, busy = false, filterTimer = null, pollTimer = null;
+  var sortMode = 'count';
+  try { if (localStorage.getItem('roulette-sort') === 'recent') sortMode = 'recent'; } catch(e) {}
+  function paintSort(){
+    document.querySelectorAll('#sortBox button').forEach(function(b){ b.classList.toggle('on', b.dataset.sort === sortMode); });
+  }
+  paintSort();
+  $('sortBox').addEventListener('click', function(e){
+    var b = e.target.closest('[data-sort]'); if (!b) return;
+    sortMode = b.dataset.sort;
+    try { localStorage.setItem('roulette-sort', sortMode); } catch(err) {}
+    paintSort();
+    if (current) render(current);
+  });
 
   checksEl.innerHTML = CATS.map(function(c){
     return '<label class="check"><input type="checkbox" checked data-cat="'+c+'"><span>'+c+'</span></label>';
@@ -212,7 +230,9 @@
     }
 
     $('countBadge').textContent = d.entries.length + '명';
-    var rows = d.entries.slice().sort(function(a,b){ return b.total-a.total; });
+    var rows = d.entries.slice().sort(sortMode === 'recent'
+      ? function(a,b){ return (b.lastAt-a.lastAt) || (b.order-a.order); }
+      : function(a,b){ return (b.total-a.total) || (b.lastAt-a.lastAt); });
     $('body').innerHTML = rows.length ? rows.map(function(e){
       var c = e.counts || {};
       var name = e.id && e.id!==e.name ? esc(e.name)+'('+esc(e.id)+')' : esc(e.name);

@@ -89,9 +89,10 @@ function snapshot() {
     enabled: state.enabled,
     categories: CATEGORIES,
     status: state.active ? chatStatus : { state: 'idle', message: '수집 중지됨', title: '' },
-    entries: state.entries.map((e) => {
+    // order: 처음 후원한 순서. lastAt 이 없는 예전 기록은 최신순 정렬에서 이 순서로 대신한다.
+    entries: state.entries.map((e, order) => {
       const total = totalOf(e, state.enabled);
-      return { id: e.id, name: e.name, counts: e.counts, total, multiplier: multiplierOf(total, state.unit, state.bonus) };
+      return { id: e.id, name: e.name, counts: e.counts, total, multiplier: multiplierOf(total, state.unit, state.bonus), lastAt: e.lastAt || 0, order };
     }),
     rouletteText: rouletteText(),
     logCount: log.length,
@@ -143,6 +144,7 @@ function addDonation(category, id, name, count, title, rawType) {
   e.name = name; // 닉네임이 바뀌었을 수 있으니 최신 값으로
   if (id) e.id = id;
   e.counts[category] = (e.counts[category] || 0) + count;
+  e.lastAt = Date.now(); // 최신순 정렬용
 
   addLog(category, id, name, count, title, rawType);
   console.log(`[roulette] [${category}] ${name}(${id}) x${count}`);
