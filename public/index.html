@@ -111,6 +111,9 @@
   .memo-tab{font:inherit;font-size:12.5px;border-radius:999px;padding:5px 12px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-dim);cursor:pointer;}
   .memo-tab:hover{border-color:var(--accent);color:var(--text);}
   .memo-tab.active{background:var(--accent);border-color:var(--accent);color:#06231F;font-weight:700;}
+  .help-btn{width:20px;height:20px;border-radius:50%;border:1px solid var(--border);background:var(--surface-2);color:var(--text-dim);font:inherit;font-size:12px;font-weight:800;line-height:18px;padding:0;margin-left:7px;cursor:pointer;vertical-align:middle;}
+  .help-btn:hover,.help-btn.on{border-color:var(--accent);color:var(--accent);}
+  .help-text{margin:0 0 12px;font-size:12.5px;color:var(--text-dim);background:var(--surface-2);border-radius:10px;padding:9px 11px;line-height:1.55;}
   .memo-tab.add{padding:5px 10px;border-style:dashed;}
   .memo-tab[draggable="true"]{cursor:grab;}
   .memo-tab.dragging{opacity:.4;}
@@ -257,11 +260,20 @@
       '</div></div>';
   }
 
+  // 카드 제목 옆 ? 버튼: 누르면 설명이 펼쳐진다 (20초마다 다시 그려도 열린 상태 유지)
+  var helpOpen = {};
+  function helpBtn(key){
+    return '<button type="button" class="help-btn'+(helpOpen[key]?' on':'')+'" data-action="toggle-help" data-key="'+key+'" aria-label="설명 보기" title="설명 보기">?</button>';
+  }
+  function helpText(key, html){
+    return helpOpen[key] ? '<p class="help-text">'+html+'</p>' : '';
+  }
+
   function unscheduledHTML(){
     var list = STATE.unscheduled.length ? STATE.unscheduled.map(tbdItemHTML).join('') : '<div class="empty">아직 없습니다. 아래에서 추가해보세요.</div>';
     return '<section class="card">'+
-      '<h2 style="font-weight:800;font-size:17px;margin:0 0 3px;">날짜 미정 일정</h2>'+
-      '<p class="updated" style="margin:0 0 12px;">아직 날짜가 안 정해진 일정을 여기 적어두고, 정해지면 📅 버튼으로 캘린더에 배정하세요.</p>'+
+      '<h2 style="font-weight:800;font-size:17px;margin:0 0 10px;">날짜 미정 일정'+helpBtn('tbd')+'</h2>'+
+      helpText('tbd', '아직 날짜가 안 정해진 일정을 여기 적어두고, 정해지면 📅 버튼으로 캘린더에 배정하세요.')+
       '<div class="tbd-list">'+list+'</div>'+
       '<form id="tbd-add-form" class="tbd-add">'+
         '<input type="text" name="title" placeholder="예: 팀 오프라인 촬영 (날짜 미정)" required>'+
@@ -287,10 +299,10 @@
   function sidebarHTML(){
     var list = STATE.notices.length ? STATE.notices.map(noticeCard).join('') : '<div class="empty-notices">아직 크롤링된 공지가 없습니다. 잠시 후 새로고침 해보세요.</div>';
     return '<section class="card side">'+
-      '<h2>최근 방송 공지</h2>'+
+      '<h2>최근 방송 공지'+helpBtn('notices')+'</h2>'+
       '<p class="updated">'+esc(STATE.meta.crawledAtLabel)+' · <a href="'+esc(STATE.meta.boardUrl)+'" target="_blank" rel="noopener" style="color:var(--accent)">게시판 원문</a></p>'+
+      helpText('notices', '공지는 '+esc(STATE.meta.streamer)+'님이 방송국 게시판에 직접 올린 글을 그대로 가져온 것입니다. 날짜 표기가 없는 글은 앞뒤 글을 참고한 추정 날짜입니다. 2시간마다 자동으로 다시 가져오고, 위쪽 공지 새로고침 버튼으로 즉시 갱신할 수 있습니다.')+
       '<div class="notice-list">'+list+'</div>'+
-      '<p class="foot-note">공지는 '+esc(STATE.meta.streamer)+'님이 방송국 게시판에 직접 올린 글을 그대로 가져온 것입니다. 날짜 표기가 없는 글은 앞뒤 글을 참고한 추정 날짜입니다. 2시간마다 자동으로 다시 가져오고, 우측 상단 새로고침 버튼으로 즉시 갱신할 수 있습니다.</p>'+
     '</section>';
   }
 
@@ -325,8 +337,8 @@
       '</form>';
     }
     return '<section class="card">'+
-      '<h2 style="font-weight:800;font-size:17px;margin:0 0 3px;">메모장</h2>'+
-      '<p class="updated" style="margin:0 0 12px;">일정, CK, 매크로 등 페이지별로 나눠 적어두는 메모장입니다. 같이 쓰는 사람 모두에게 보입니다. 탭은 끌어서(또는 ◀ ▶ 버튼으로) 순서를 바꿀 수 있어요.</p>'+
+      '<h2 style="font-weight:800;font-size:17px;margin:0 0 10px;">메모장'+helpBtn('memo')+'</h2>'+
+      helpText('memo', '일정, CK, 매크로 등 페이지별로 나눠 적어두는 메모장입니다. 같이 쓰는 사람 모두에게 보입니다. 탭은 끌어서(또는 ◀ ▶ 버튼으로) 순서를 바꿀 수 있어요.')+
       '<div class="memo-tabs">'+tabs+'</div>'+body+
     '</section>';
   }
@@ -371,9 +383,10 @@
       }).join('')+'</div>';
     }
     return '<section class="card">'+
-      '<h2 style="font-weight:800;font-size:17px;margin:0 0 3px;">롤 월즈 일정 · 결과</h2>'+
-      '<p class="updated" style="margin:0 0 12px;">네이버 e스포츠 일정에서 자동으로 가져옵니다 (한국 시간)'+(w.updatedLabel?' · '+esc(w.updatedLabel):'')+
-        ' · <a href="https://game.naver.com/esports/League_of_Legends/schedule/world_championship" target="_blank" rel="noopener" style="color:var(--accent);">원문 보기</a></p>'+
+      '<h2 style="font-weight:800;font-size:17px;margin:0 0 3px;">롤 월즈 일정 · 결과'+helpBtn('worlds')+'</h2>'+
+      '<p class="updated" style="margin:0 0 12px;">'+(w.updatedLabel?esc(w.updatedLabel)+' · ':'')+
+        '<a href="https://game.naver.com/esports/League_of_Legends/schedule/world_championship" target="_blank" rel="noopener" style="color:var(--accent);">원문 보기</a></p>'+
+      helpText('worlds', '네이버 e스포츠 일정에서 자동으로 가져옵니다. 시간은 한국 시간이에요.')+
       body+
       (pastCount>0?'<div style="margin-top:10px;"><button type="button" class="btn" data-action="toggle-past-worlds">'+(showPastWorlds?'지난 경기 숨기기':'지난 경기 보기 ('+pastCount+')')+'</button></div>':'')+
     '</section>';
@@ -399,8 +412,8 @@
         '</div></div>';
     }).join('');
     return '<section class="card">'+
-      '<h2 style="font-weight:800;font-size:17px;margin:0 0 3px;">첨부 파일</h2>'+
-      '<p class="updated" style="margin:0 0 12px;">작은 파일(이미지, 문서 등)을 올려두고 같이 쓰는 사람이 내려받을 수 있어요. 파일 1개당 최대 5MB.</p>'+
+      '<h2 style="font-weight:800;font-size:17px;margin:0 0 10px;">첨부 파일'+helpBtn('files')+'</h2>'+
+      helpText('files', '작은 파일(이미지, 문서 등)을 올려두고 같이 쓰는 사람이 내려받을 수 있어요. 파일 1개당 최대 5MB.')+
       '<div class="file-list">'+(list || '<div class="empty">아직 올린 파일이 없어요.</div>')+'</div>'+
       '<input type="file" id="file-input" class="file-input" multiple>'+
       '<button type="button" class="btn primary" data-action="file-pick"'+(uploading?' disabled':'')+'>'+(uploading?'올리는 중…':'+ 파일 올리기')+'</button>'+
@@ -776,6 +789,7 @@
     if(action==='memo-tab'){ selectMemo(el.getAttribute('data-id')); return; }
     if(action==='memo-add'){ stashMemoDraft(); openMemoPageModal(null); return; }
     if(action==='memo-rename'){ var mp=(STATE.memos||[]).find(function(x){return x.id===el.getAttribute('data-id');}); if(mp) openMemoPageModal(mp); return; }
+    if(action==='toggle-help'){ var hk=el.getAttribute('data-key'); helpOpen[hk]=!helpOpen[hk]; stashMemoDraft(); render(); return; }
     if(action==='memo-move'){ moveMemo(el.getAttribute('data-id'), Number(el.getAttribute('data-dir'))); return; }
     if(action==='memo-delete'){ deleteMemoPage(el.getAttribute('data-id')); return; }
     if(action==='file-pick'){ var fi=document.getElementById('file-input'); if(fi) fi.click(); return; }
