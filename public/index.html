@@ -39,6 +39,10 @@
   .brand{display:flex;flex-direction:column;gap:4px;}
   .brand .eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-weight:700;}
   .brand h1{font-weight:800;font-size:clamp(22px,4vw,30px);margin:0;letter-spacing:-.01em;}
+  .title-row{display:flex;align-items:center;gap:8px 10px;flex-wrap:wrap;}
+  .title-row h1{margin-right:6px;}
+  .tool-btn{display:inline-flex;align-items:center;padding:7px 14px;border-radius:999px;border:1px solid var(--accent);background:var(--accent-soft);color:var(--accent-ink);font-size:13px;font-weight:700;text-decoration:none;box-shadow:var(--shadow);white-space:nowrap;}
+  .tool-btn:hover{filter:brightness(1.08);}
   .brand p{margin:0;color:var(--text-dim);font-size:13px;}
   .status-pill{display:inline-flex;align-items:center;gap:8px;padding:7px 12px;border-radius:999px;background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow);font-size:12.5px;color:var(--text-dim);white-space:nowrap;}
   .refresh-btn{border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:999px;padding:7px 14px;font-size:12.5px;cursor:pointer;box-shadow:var(--shadow);}
@@ -165,8 +169,10 @@
     { label: '🔗 배그시트지', url: 'https://docs.google.com/spreadsheets/d/1lNsABxM4BWOXQFCysYlG-K-8IIBR73yxN8EOGRZmUdI/edit?gid=2113238347#gid=2113238347' },
     { label: '🔗 공경내기 시트지', url: 'https://docs.google.com/spreadsheets/d/16QXdUSC3UVyXpYBeG2hVwOSMw12NawlupR8XTwW59Q0/edit?usp=sharing' },
     { label: '🔗 FC온라인 스트리머 랭크', url: 'https://asdfc.kr' },
-    { label: '🔗 롤 월즈 일정', url: 'https://game.naver.com/esports/League_of_Legends/schedule/world_championship' },
-    { label: '🔗 유니코드 변환', url: 'https://anytexteditor.com/ko/unicode-text-converter' },
+    { label: '🔗 유니코드 변환', url: 'https://anytexteditor.com/ko/unicode-text-converter' }
+  ];
+  // 이 사이트 안의 방송 도구 — 제목 옆에 따로 둔다.
+  var TOOLS = [
     { label: '🎰 후원 룰렛 명단', url: '/roulette.html' },
     { label: '🚨 제재 이력 참여자', url: '/watch.html' }
   ];
@@ -393,7 +399,9 @@
       '<div class="top">'+
         '<div class="brand">'+
           '<span class="eyebrow">SOOP · '+esc(STATE.meta.streamer)+' 매니저</span>'+
-          '<h1>'+esc(STATE.meta.streamer)+' 매니저 작업실</h1>'+
+          '<div class="title-row"><h1>'+esc(STATE.meta.streamer)+' 매니저 작업실</h1>'+
+            TOOLS.map(function(l){ return '<a class="tool-btn" href="'+esc(l.url)+'" target="_blank" rel="noopener">'+esc(l.label)+'</a>'; }).join('')+
+          '</div>'+
           '<p>방송 일정과 공지, 메모, 방송 도구를 한곳에서 같이 관리해요.</p>'+
         '</div>'+
         '<div id="presence"></div>'+
