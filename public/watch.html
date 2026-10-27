@@ -60,9 +60,6 @@
   .btn{border:1px solid var(--border);background:var(--surface-2);color:var(--text);border-radius:10px;padding:9px 16px;font-size:13.5px;font-weight:700;}
   .btn:hover{border-color:var(--accent);color:var(--accent);}
   .btn:disabled{opacity:.55;cursor:default;}
-  .btn-primary{background:var(--accent);border-color:var(--accent);color:#fff;margin-left:auto;}
-  .btn-primary:hover{color:#fff;filter:brightness(1.08);}
-  .btn-primary.stop{background:var(--danger);border-color:var(--danger);}
   .error{margin-top:10px;padding:9px 11px;border-radius:10px;background:var(--warm-soft);color:var(--danger);font-size:12.5px;}
   h2{font-weight:800;font-size:16px;margin:0 0 12px;display:flex;align-items:center;gap:8px;}
   .badge{font-size:11.5px;font-weight:700;color:var(--danger);background:var(--danger-soft);padding:2px 8px;border-radius:6px;}
@@ -111,7 +108,6 @@
       <label class="ctl">제재 건수
         <span><input type="number" id="min" min="1" value="10"> 건 이상</span>
       </label>
-      <button class="btn btn-primary" id="toggleBtn" disabled>확인 시작</button>
     </div>
     <div class="stats" id="stats"></div>
     <div class="error" id="errorBox" hidden></div>
@@ -129,20 +125,19 @@
       </table>
     </div>
     <div class="hint">
-      줄을 누르면 제재 내역이 펼쳐집니다. <span class="new">새로 입장</span>은 확인을 켠 뒤에 들어온 사람입니다.<br>
-      제재 기록은 <a href="https://www.trackify.kr/soop/lshooooo?tab=sanctions" target="_blank" rel="noopener noreferrer">트래키파이</a>에 공개된 이 방송의 기록(최근 90일)이고, 켜져 있는 동안 15분마다 새로 받아옵니다.
+      줄을 누르면 제재 내역이 펼쳐집니다. <span class="new">새로 입장</span>은 방송 중간에 들어온 사람입니다.<br>
+      제재 기록은 <a href="https://www.trackify.kr/soop/lshooooo?tab=sanctions" target="_blank" rel="noopener noreferrer">트래키파이</a>에 공개된 이 방송의 기록(최근 90일)이고, 15분마다 새로 받아옵니다. 방송이 켜지면 자동으로 확인을 시작해요.
       참여자 목록에는 로그인한 시청자만 나옵니다.
     </div>
   </section>
 </div>
 
-<script src="/presence-client.js" data-page="watch"></script>
 <script>
 (function(){
   "use strict";
   var $ = function(id){ return document.getElementById(id); };
-  var daysEl=$('days'), minEl=$('min'), toggleBtn=$('toggleBtn');
-  var current=null, busy=false, pollTimer=null, open={};
+  var daysEl=$('days'), minEl=$('min');
+  var current=null, pollTimer=null, open={};
 
   try {
     var saved = JSON.parse(localStorage.getItem('watch-filter') || '{}');
@@ -164,37 +159,30 @@
   function kst(s){ return s ? s.slice(5,7)+'/'+s.slice(8,10)+' '+s.slice(11,16) : '-'; }
   function showError(msg){ $('errorBox').textContent=msg; $('errorBox').hidden=!msg; }
 
-  var STATUS_LABEL = { idle:'꺼져 있음', connecting:'연결 중', live:'확인 중', offline:'방송 대기 중', reconnecting:'재연결 중', error:'오류' };
+  var STATUS_LABEL = { idle:'꺼져 있음', connecting:'연결 중', live:'확인 중', offline:'방송 꺼짐 · 켜지면 자동 확인', reconnecting:'재연결 중', error:'오류' };
 
   function render(d){
     current = d;
     var st = d.status || {state:'idle'};
-    $('statusDot').className = 'dot ' + (d.active ? st.state : 'idle');
-    var label = d.active ? (STATUS_LABEL[st.state]||st.state) : '꺼져 있음';
-    if (d.active && st.state==='live' && st.title) label += ' · ' + st.title;
+    $('statusDot').className = 'dot ' + st.state;
+    var label = STATUS_LABEL[st.state]||st.state;
+    if (st.state==='live' && st.title) label += ' · ' + st.title;
     $('statusText').textContent = label;
     $('statusText').title = st.message || '';
 
-    toggleBtn.disabled = busy;
-    toggleBtn.textContent = d.active ? '확인 중지' : '확인 시작';
-    toggleBtn.classList.toggle('stop', d.active);
 
     var s = d.sanctions;
     var stats = [];
-    if (d.active) stats.push('지금 참여자 <b>'+fmt(d.viewerCount)+'</b>명');
+    if (st.state==='live') stats.push('지금 참여자 <b>'+fmt(d.viewerCount)+'</b>명');
     stats.push('제재 기록 <b>'+fmt(s.count)+'</b>건 (최근 '+s.keepDays+'일)');
     stats.push(s.syncing ? '제재 기록 받는 중…' : (s.syncedAt ? '기록 갱신 '+ago(s.syncedAt) : '아직 기록을 받지 않음'));
     $('stats').innerHTML = stats.map(function(x){return '<span>'+x+'</span>';}).join('');
-    showError(s.error || (d.active && st.state==='error' ? st.message : ''));
+    showError(s.error || (st.state==='error' ? st.message : ''));
 
     $('periodHead').textContent = '최근 '+d.days+'일';
     $('countBadge').textContent = d.list.length + '명';
 
     var body = $('body');
-    if (!d.active) {
-      body.innerHTML = '<tr class="empty"><td colspan="6">‘확인 시작’을 누르면 방송 채팅방에 들어가 지금 참여자를 확인합니다.</td></tr>';
-      return;
-    }
     if (st.state!=='live') {
       body.innerHTML = '<tr class="empty"><td colspan="6">'+esc(st.message||'연결 중…')+'</td></tr>';
       return;
@@ -241,16 +229,6 @@
   }
   daysEl.addEventListener('change', onFilter);
   minEl.addEventListener('change', onFilter);
-
-  toggleBtn.addEventListener('click', async function(){
-    if (!current) return;
-    busy = true; toggleBtn.disabled = true;
-    try {
-      await fetch(current.active ? '/api/watch/stop' : '/api/watch/start', { method:'POST' });
-      await poll();
-    } catch(e){ showError(e.message); }
-    finally { busy = false; toggleBtn.disabled = false; }
-  });
 
   poll();
 })();

@@ -1,38 +1,43 @@
-// watch.js — 지금 방송에 들어와 있는 참여자 중 최근 제재 이력이 많은 사람 찾기
+// watch.js — 지금 방송에 들어와 있는 참여자 확인
+//   - 참여자 중 최근 제재 이력이 많은 사람 (제재 이력 참여자 페이지)
+//   - 참여자 중 매니저 (작업실 오른쪽 위 "방송 중 매니저")
 //
 // 채팅 감시 시스템(soop-chat-monitor)과 같은 방식으로 두 가지 데이터를 합친다.
 //   1) 참여자 목록: 채팅방에 들어가면 채팅 서버가 지금 들어와 있는 (로그인한) 참여자
 //      전체 목록을 svc 4 로 보내주고, 이후 입장/퇴장도 svc 4 로 알려준다.
+//      각 참여자에 붙어 오는 flag 의 256 비트가 매니저 표시다.
 //   2) 제재 이력: 트래키파이(trackify.kr)에 공개된 이 방송의 강퇴·채금 기록.
-//      최근 90일치를 받아 store 에 저장해 두고, 켜져 있는 동안 15분마다 새 기록만 이어받는다.
+//      최근 90일치를 받아 store 에 저장해 두고, 15분마다 새 기록만 이어받는다.
+//
+// 서버가 켜져 있는 동안 항상 채팅방에 붙어 있는다. 방송이 꺼져 있으면 1분마다 다시
+// 확인하다가 방송이 켜지면 자동으로 들어간다. 그래서 서버가 잠들지 않게 한다 (keepawake.js).
 
 const { SoopChat } = require('./soop-chat');
 const { getState, setState } = require('./store');
 const keepAwake = require('./keepawake');
 
 const STREAMER = 'lshooooo';
-const STATE_KEY = 'watch';
 const SANCTIONS_KEY = 'sanctions';
 const KEEP_DAYS = 90;
 const SYNC_EVERY_MS = 15 * 60 * 1000;
 const PAGE_DELAY_MS = 700; // 트래키파이 서버 부담을 줄이기 위한 요청 간격
+const FLAG_MANAGER = 1 << 8;
 
-let active = false;
 let chat = null;
-let chatStatus = { state: 'idle', message: '꺼져 있음', title: '' };
+let chatStatus = { state: 'connecting', message: '연결 준비 중', title: '' };
 let connectedAt = 0;
-// 채팅 서버가 주는 아이디 그대로("abc(2)" = 같은 아이디의 두 번째 접속) → { id, nick, joinedAt }
+// 채팅 서버가 주는 아이디 그대로("abc(2)" = 같은 아이디의 두 번째 접속) → { id, nick, manager, joinedAt }
 const viewers = new Map();
 
 let sanctions = { syncedAt: 0, items: [] }; // items: [userId, nick, type(K|M), createdAt(KST), actorNick]
 let byUser = new Map(); // userId → items (최신순)
 let syncing = false;
 let syncError = '';
-let syncTimer = null;
 let loading = null;
 
 const normId = (id) => String(id || '').replace(/\(\d+\)$/, '');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const isManager = (flag) => (Number(String(flag || '').split('|')[0]) & FLAG_MANAGER) !== 0;
 
 // 트래키파이 시각은 한국 시간 "YYYY-MM-DDTHH:mm:ss" 라서 같은 형식으로 비교한다.
 function kstString(offsetDays = 0) {
@@ -115,19 +120,20 @@ function onPacket({ code, parts }) {
     // 입장 직후 받는 참여자 목록: 1 | 아이디 | 닉네임 | flag | 아이디 | 닉네임 | flag ...
     for (let i = 1; i + 2 < parts.length; i += 3) {
       if (parts[i] === '-1' || !parts[i]) continue;
-      if (!viewers.has(parts[i])) viewers.set(parts[i], { id: normId(parts[i]), nick: parts[i + 1], joinedAt: 0 });
+      if (!viewers.has(parts[i])) {
+        viewers.set(parts[i], { id: normId(parts[i]), nick: parts[i + 1], manager: isManager(parts[i + 2]), joinedAt: 0 });
+      }
     }
   } else if (parts[0] === '1' && parts[1]) {
-    viewers.set(parts[1], { id: normId(parts[1]), nick: parts[2] || '', joinedAt: Date.now() });
+    // 입장: 1 | 아이디 | 닉네임 | flag
+    viewers.set(parts[1], { id: normId(parts[1]), nick: parts[2] || '', manager: isManager(parts[3]), joinedAt: Date.now() });
   } else if (parts[0] === '-1' && parts[1]) {
     viewers.delete(parts[1]); // 일반 퇴장·강퇴 모두
   }
 }
 
 function startChat() {
-  stopChat();
   viewers.clear();
-  chatStatus = { state: 'connecting', message: '연결 준비 중', title: '' };
   chat = new SoopChat(STREAMER).start();
   chat.on('status', (s) => {
     // 끊겼다가 다시 들어가면 참여자 목록을 처음부터 다시 받는다.
@@ -138,33 +144,29 @@ function startChat() {
   });
   chat.on('packet', onPacket);
   keepAwake.acquire('watch');
-  clearInterval(syncTimer);
-  syncTimer = setInterval(syncSanctions, SYNC_EVERY_MS);
+  setInterval(syncSanctions, SYNC_EVERY_MS);
   syncSanctions();
 }
 
-function stopChat() {
-  keepAwake.release('watch');
-  clearInterval(syncTimer);
-  syncTimer = null;
-  viewers.clear();
-  if (chat) {
-    chat.removeAllListeners();
-    chat.stop();
-    chat = null;
+// 같은 아이디로 여러 번 접속한 경우("abc", "abc(2)") 한 명으로 묶는다.
+function presentUsers() {
+  const present = new Map(); // id → { nick, manager, joinedAt }
+  for (const v of viewers.values()) {
+    const prev = present.get(v.id);
+    if (!prev) present.set(v.id, { nick: v.nick, manager: v.manager, joinedAt: v.joinedAt });
+    else {
+      prev.manager = prev.manager || v.manager;
+      if (prev.joinedAt && (!v.joinedAt || v.joinedAt < prev.joinedAt)) prev.joinedAt = v.joinedAt;
+    }
   }
+  return present;
 }
 
 // ---- 결과 ----
 
 function snapshot(days, min) {
   const cutoff = kstString(-days);
-  const present = new Map(); // id → { nick, joinedAt }
-  for (const v of viewers.values()) {
-    const prev = present.get(v.id);
-    if (!prev) present.set(v.id, { nick: v.nick, joinedAt: v.joinedAt });
-    else if (prev.joinedAt && (!v.joinedAt || v.joinedAt < prev.joinedAt)) prev.joinedAt = v.joinedAt;
-  }
+  const present = presentUsers();
 
   const list = [];
   for (const [id, v] of present) {
@@ -188,10 +190,9 @@ function snapshot(days, min) {
   list.sort((a, b) => b.total - a.total || (a.last < b.last ? 1 : -1));
 
   return {
-    active,
     streamer: STREAMER,
-    status: active ? chatStatus : { state: 'idle', message: '꺼져 있음', title: '' },
-    connectedAt: active ? connectedAt : 0,
+    status: chatStatus,
+    connectedAt,
     viewerCount: present.size,
     days,
     min,
@@ -206,6 +207,16 @@ function snapshot(days, min) {
   };
 }
 
+// 작업실 오른쪽 위 "방송 중 매니저" 표시용. 먼저 들어와 있던 순서대로.
+function managers() {
+  const list = [];
+  for (const [id, v] of presentUsers()) {
+    if (v.manager) list.push({ id, nick: v.nick, joinedAt: v.joinedAt || connectedAt });
+  }
+  list.sort((a, b) => a.joinedAt - b.joinedAt);
+  return { live: chatStatus.state === 'live', state: chatStatus.state, list };
+}
+
 function ensureLoaded() {
   if (!loading) {
     loading = (async () => {
@@ -214,20 +225,15 @@ function ensureLoaded() {
         sanctions = saved;
         rebuildIndex();
       }
-      const st = await getState(STATE_KEY, null);
-      active = Boolean(st && st.active);
     })();
   }
   return loading;
 }
 
-// 서버가 켜질 때 호출: 켜져 있던 상태였으면 다시 접속한다.
+// 서버가 켜질 때 호출: 채팅방에 들어가 참여자 확인을 시작한다.
 async function resume() {
   await ensureLoaded();
-  if (active) {
-    console.log('[watch] 이전에 켜져 있던 제재 이력 참여자 확인을 다시 시작합니다.');
-    startChat();
-  }
+  startChat();
 }
 
 function mount(app) {
@@ -237,23 +243,6 @@ function mount(app) {
     const min = Math.max(1, parseInt(req.query.min, 10) || 10);
     res.json(snapshot(days, min));
   });
-
-  app.post('/api/watch/start', async (req, res) => {
-    await ensureLoaded();
-    active = true;
-    startChat();
-    await setState(STATE_KEY, { active });
-    res.json({ ok: true });
-  });
-
-  app.post('/api/watch/stop', async (req, res) => {
-    await ensureLoaded();
-    active = false;
-    stopChat();
-    chatStatus = { state: 'idle', message: '꺼져 있음', title: '' };
-    await setState(STATE_KEY, { active });
-    res.json({ ok: true });
-  });
 }
 
-module.exports = { mount, resume, onPacket, _viewers: viewers };
+module.exports = { mount, resume, managers, onPacket };

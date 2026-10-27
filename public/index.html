@@ -43,6 +43,13 @@
   .title-row h1{margin-right:6px;}
   .tool-btn{display:inline-flex;align-items:center;padding:7px 14px;border-radius:999px;border:1px solid var(--accent);background:var(--accent-soft);color:var(--accent-ink);font-size:13px;font-weight:700;text-decoration:none;box-shadow:var(--shadow);white-space:nowrap;}
   .tool-btn:hover{filter:brightness(1.08);}
+  .mgr{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;padding:7px 10px 7px 12px;border-radius:999px;background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow);font-size:12.5px;color:var(--text-dim);max-width:100%;}
+  .mgr-dot{width:8px;height:8px;border-radius:50%;background:#1F9D55;box-shadow:0 0 0 3px rgba(31,157,85,.18);flex:none;}
+  .mgr.off .mgr-dot{background:var(--text-dim);box-shadow:none;}
+  .mgr-count b{color:var(--text);}
+  .mgr-chips{display:inline-flex;gap:5px;flex-wrap:wrap;}
+  .mgr-chip{font-size:12px;font-weight:600;color:var(--text);background:var(--surface-2);border:1px solid var(--border);border-radius:999px;padding:3px 9px;white-space:nowrap;}
+  .mgr-chip.more{color:var(--text-dim);}
   .brand p{margin:0;color:var(--text-dim);font-size:13px;}
   .status-pill{display:inline-flex;align-items:center;gap:8px;padding:7px 12px;border-radius:999px;background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow);font-size:12.5px;color:var(--text-dim);white-space:nowrap;}
   .refresh-btn{border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:999px;padding:7px 14px;font-size:12.5px;cursor:pointer;box-shadow:var(--shadow);}
@@ -157,11 +164,10 @@
 </head>
 <body>
 <div id="app"><div style="padding:40px;text-align:center;color:var(--text-dim);">불러오는 중…</div></div>
-<script src="/presence-client.js" data-page="main"></script>
 <script>
 (function(){
   "use strict";
-  var STATE = { events:{}, notices:[], unscheduled:[], memos:[], files:[], worlds:{matches:[],updatedLabel:'',sourceUrl:''}, meta:{streamer:'이상호', boardUrl:'', crawledAtLabel:''} };
+  var STATE = { events:{}, notices:[], unscheduled:[], memos:[], files:[], worlds:{matches:[],updatedLabel:'',sourceUrl:''}, managers:{live:false,state:'',list:[]}, meta:{streamer:'이상호', boardUrl:'', crawledAtLabel:''} };
   var LINKS = [
     { label: '🔗 제재내역', url: 'https://www.trackify.kr/soop/lshooooo?tab=sanctions' },
     { label: '🔗 딥롤', url: 'https://www.deeplol.gg/aram?hl=ko' },
@@ -394,6 +400,23 @@
     '</section>';
   }
 
+  // 오른쪽 위: 지금 방송 채팅방에 들어와 있는 매니저 (예: ● 방송 중 매니저 5명 · 하늘하늘_ · 데스 …)
+  function managersHTML(){
+    var m = STATE.managers || {list:[]};
+    if(!m.live){
+      var why = m.state==='offline' ? '방송 꺼짐' : '방송 확인 중…';
+      return '<div class="mgr off"><span class="mgr-dot"></span><span class="mgr-count">매니저 · '+why+'</span></div>';
+    }
+    var MAX = 8;
+    var chips = m.list.slice(0, MAX).map(function(u){
+      var tip = u.id + (u.joinedAt ? ' · ' + new Date(u.joinedAt).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) + ' 부터' : '');
+      return '<span class="mgr-chip" title="'+esc(tip)+'">'+esc(u.nick || u.id)+'</span>';
+    }).join('');
+    var rest = m.list.slice(MAX);
+    if(rest.length) chips += '<span class="mgr-chip more" title="'+esc(rest.map(function(u){return u.nick||u.id;}).join(', '))+'">+'+rest.length+'</span>';
+    return '<div class="mgr"><span class="mgr-dot"></span><span class="mgr-count">방송 중 매니저 <b>'+m.list.length+'</b>명</span>'+(chips?'<span class="mgr-chips">'+chips+'</span>':'')+'</div>';
+  }
+
   function render(){
     document.getElementById('app').innerHTML =
       '<div class="top">'+
@@ -404,7 +427,7 @@
           '</div>'+
           '<p>방송 일정과 공지, 메모, 방송 도구를 한곳에서 같이 관리해요.</p>'+
         '</div>'+
-        '<div id="presence"></div>'+
+        managersHTML()+
       '</div>'+
       '<div class="top">'+
         '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">'+
@@ -417,7 +440,6 @@
       '<div id="modal-slot"></div>';
     var btn = document.getElementById('refresh-btn');
     if(btn) btn.disabled = refreshing;
-    if(window.Presence) window.Presence.paint();
   }
 
   function openDayModal(key, prefill){
@@ -480,6 +502,7 @@
     STATE.files = data.files || [];
     STATE.worlds = data.worlds || {matches:[],updatedLabel:'',sourceUrl:''};
     STATE.meta = data.meta || STATE.meta;
+    STATE.managers = data.managers || STATE.managers;
     render();
   }
 

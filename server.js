@@ -6,7 +6,6 @@ const { getState, setState, deleteState } = require('./store');
 const roulette = require('./roulette');
 const watch = require('./watch');
 const keepAwake = require('./keepawake');
-const presence = require('./presence');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -30,7 +29,6 @@ app.use(express.static(path.join(__dirname, 'public')));
 keepAwake.mount(app);
 roulette.mount(app);
 watch.mount(app);
-presence.mount(app);
 
 app.get('/api/state', async (req, res) => {
   const [events, notices, unscheduled, memos, meta, files, worlds] = await Promise.all([
@@ -44,7 +42,7 @@ app.get('/api/state', async (req, res) => {
   ]);
   // files에는 이름/크기/날짜 같은 목록 정보만 있고, 파일 내용 자체는 따로 저장되어 있습니다
   // (20초마다 이 API를 부르기 때문에 파일 내용을 같이 보내면 안 됩니다).
-  res.json({ events, notices, unscheduled, memos, meta, files, worlds });
+  res.json({ events, notices, unscheduled, memos, meta, files, worlds, managers: watch.managers() });
 });
 
 // ---- 메모장 (여러 페이지) ----
