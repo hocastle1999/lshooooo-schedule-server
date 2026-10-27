@@ -74,6 +74,10 @@
   tr.row:hover td{background:var(--surface-2);}
   .new{display:inline-block;margin-left:6px;font-size:11px;font-weight:700;color:var(--warm);background:var(--warm-soft);padding:1px 6px;border-radius:5px;}
   .uid{color:var(--text-dim);}
+  .copy{font:inherit;color:inherit;background:none;border:1px dashed transparent;border-radius:6px;padding:1px 4px;margin:-1px -2px;cursor:copy;}
+  .copy:hover{border-color:var(--accent);color:var(--accent);}
+  .copy.done{border-color:var(--ok);color:var(--ok);}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--text);color:var(--bg);font-size:13px;font-weight:600;padding:9px 16px;border-radius:999px;box-shadow:var(--shadow);z-index:30;pointer-events:none;}
   tr.detail td{background:var(--surface-2);white-space:normal;padding:10px 12px;}
   .hist{display:flex;flex-wrap:wrap;gap:6px;}
   .hist span{font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:3px 8px;}
@@ -125,7 +129,7 @@
       </table>
     </div>
     <div class="hint">
-      줄을 누르면 제재 내역이 펼쳐집니다. <span class="new">새로 입장</span>은 방송 중간에 들어온 사람입니다.<br>
+      닉네임이나 아이디를 누르면 복사되고, 줄의 다른 곳을 누르면 제재 내역이 펼쳐집니다. <span class="new">새로 입장</span>은 방송 중간에 들어온 사람입니다.<br>
       제재 기록은 <a href="https://www.trackify.kr/soop/lshooooo?tab=sanctions" target="_blank" rel="noopener noreferrer">트래키파이</a>에 공개된 이 방송의 기록(최근 90일)이고, 15분마다 새로 받아옵니다. 방송이 켜지면 자동으로 확인을 시작해요.
       참여자 목록에는 로그인한 시청자만 나옵니다.
     </div>
@@ -192,7 +196,8 @@
       return;
     }
     body.innerHTML = d.list.map(function(u){
-      var name = esc(u.nick) + (u.id!==u.nick ? ' <span class="uid">('+esc(u.id)+')</span>' : '');
+      var name = '<button type="button" class="copy" data-copy="'+esc(u.nick)+'" title="닉네임 복사">'+esc(u.nick)+'</button>' +
+        (u.id!==u.nick ? ' <span class="uid">(<button type="button" class="copy" data-copy="'+esc(u.id)+'" title="아이디 복사">'+esc(u.id)+'</button>)</span>' : '');
       if (u.joinedAt) name += '<span class="new" title="'+hm(u.joinedAt)+' 입장">새로 입장 '+hm(u.joinedAt)+'</span>';
       var row = '<tr class="row" data-id="'+esc(u.id)+'"><td class="name">'+name+'</td>'+
         '<td class="num total">'+fmt(u.total)+'</td><td class="num">'+fmt(u.kicks)+'</td><td class="num">'+fmt(u.mutes)+'</td>'+
@@ -206,7 +211,29 @@
     }).join('');
   }
 
+  function toast(msg){
+    var old = document.querySelector('.toast'); if (old) old.remove();
+    var t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(function(){ t.remove(); }, 1400);
+  }
+  async function copyText(text){
+    try { await navigator.clipboard.writeText(text); }
+    catch(e){
+      var ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta);
+      ta.select(); document.execCommand('copy'); ta.remove();
+    }
+  }
+
   $('body').addEventListener('click', function(e){
+    var btn = e.target.closest('[data-copy]');
+    if (btn) {
+      var text = btn.getAttribute('data-copy');
+      copyText(text);
+      btn.classList.add('done');
+      toast('“' + text + '” 복사했어요');
+      return; // 복사할 때는 줄을 펼치지 않는다
+    }
     var tr = e.target.closest('tr.row');
     if (!tr) return;
     var id = tr.getAttribute('data-id');
