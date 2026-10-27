@@ -157,6 +157,17 @@ class SoopChat extends EventEmitter {
         this.retry = 0;
         clearInterval(this._joinTimer);
         this._ping = setInterval(() => ws.readyState === 1 && ws.send(pingPacket()), 60_000);
+        // 방송이 끝나도 채팅방은 한동안 열려 있어서 연결이 안 끊긴다.
+        // 그래서 1분마다 방송이 아직 켜져 있는지 직접 확인하고, 꺼졌으면 나온다.
+        this._liveCheck = setInterval(async () => {
+          try {
+            await getDetail(this.bid, info.bno);
+          } catch (e) {
+            if (!(e instanceof OfflineError) || ws.readyState !== 1) return; // 일시적인 조회 실패는 무시
+            this._ended = true;
+            ws.close();
+          }
+        }, 60_000);
         this._status('live', '채팅 연결됨', { title: info.title, bno: info.bno });
         return;
       }
@@ -166,6 +177,11 @@ class SoopChat extends EventEmitter {
     ws.on('close', () => {
       this._cleanup();
       if (this.closed) return;
+      if (this._ended) {
+        this._ended = false;
+        this._status('offline', '방송이 끝났습니다. 다시 켜지면 자동으로 연결합니다');
+        return this._schedule(this.offlineRetryMs);
+      }
       this._status('reconnecting', '연결 끊김, 재연결 대기');
       this._schedule(this._backoff());
     });
@@ -261,6 +277,7 @@ class SoopChat extends EventEmitter {
   _cleanup() {
     clearInterval(this._joinTimer);
     clearInterval(this._ping);
+    clearInterval(this._liveCheck);
     if (this.ws && this.ws.readyState <= 1) {
       try {
         this.ws.close();
