@@ -169,7 +169,6 @@
   "use strict";
   var STATE = { events:{}, notices:[], unscheduled:[], memos:[], files:[], worlds:{matches:[],updatedLabel:'',sourceUrl:''}, managers:{live:false,state:'',list:[]}, meta:{streamer:'이상호', boardUrl:'', crawledAtLabel:''} };
   var LINKS = [
-    { label: '🔗 제재내역', url: 'https://www.trackify.kr/soop/lshooooo?tab=sanctions' },
     { label: '🔗 딥롤', url: 'https://www.deeplol.gg/aram?hl=ko' },
     { label: '🔗 숲롤', url: 'https://www.sooplol.com/' },
     { label: '🔗 배그시트지', url: 'https://docs.google.com/spreadsheets/d/1lNsABxM4BWOXQFCysYlG-K-8IIBR73yxN8EOGRZmUdI/edit?gid=2113238347#gid=2113238347' },
@@ -177,10 +176,11 @@
     { label: '🔗 FC온라인 스트리머 랭크', url: 'https://asdfc.kr' },
     { label: '🔗 유니코드 변환', url: 'https://anytexteditor.com/ko/unicode-text-converter' }
   ];
-  // 이 사이트 안의 방송 도구 — 제목 옆에 따로 둔다.
+  // 자주 쓰는 방송 도구 — 제목 옆에 따로 둔다.
   var TOOLS = [
     { label: '🎰 후원 룰렛 명단', url: '/roulette.html' },
-    { label: '🚨 제재 이력 참여자', url: '/watch.html' }
+    { label: '🚨 제재 이력 참여자', url: '/watch.html' },
+    { label: '🔗 제재내역', url: 'https://www.trackify.kr/soop/lshooooo?tab=sanctions' }
   ];
   var view = (function(){ var d=new Date(); return {y:d.getFullYear(), m:d.getMonth()}; })();
   var refreshing = false;
