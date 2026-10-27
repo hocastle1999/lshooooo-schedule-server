@@ -36,6 +36,7 @@ broadcasts.mount(app);
 app.get('/api/managers', (req, res) => res.json(watch.managers()));
 
 app.get('/api/state', async (req, res) => {
+  const sanctionRules = await loadSanctionRules(); // 메모장에서 옮겨오는 일이 있어서 memos 보다 먼저
   const [events, notices, unscheduled, memos, meta, files, worlds] = await Promise.all([
     getState('events', {}),
     getState('notices', []),
@@ -47,7 +48,7 @@ app.get('/api/state', async (req, res) => {
   ]);
   // files에는 이름/크기/날짜 같은 목록 정보만 있고, 파일 내용 자체는 따로 저장되어 있습니다
   // (20초마다 이 API를 부르기 때문에 파일 내용을 같이 보내면 안 됩니다).
-  res.json({ events, notices, unscheduled, memos, meta, files, worlds, managers: watch.managers() });
+  res.json({ events, notices, unscheduled, memos, meta, files, worlds, sanctionRules, managers: watch.managers() });
 });
 
 // ---- 메모장 (여러 페이지) ----
@@ -69,6 +70,28 @@ async function loadMemos() {
   await setState('memos', memos);
   return memos;
 }
+// ---- 제재 기준 ----
+// 제목 옆 '📋 제재 기준' 버튼으로 보는 글. 처음에는 메모장의 '제재 기준' 페이지를 그대로 옮겨온다.
+async function loadSanctionRules() {
+  const saved = await getState('sanctionRules', null);
+  if (saved && typeof saved.text === 'string') return saved;
+  const memos = await loadMemos();
+  const page = memos.find((m) => /제재\s*기준/.test(m.title));
+  const rules = { text: page ? page.text : '', updatedAt: Date.now() };
+  await setState('sanctionRules', rules);
+  if (page && memos.length > 1) await setState('memos', memos.filter((m) => m !== page));
+  return rules;
+}
+
+app.post('/api/sanction-rules', async (req, res) => {
+  const { text } = req.body || {};
+  if (typeof text !== 'string') return res.status(400).json({ error: '내용이 필요합니다' });
+  if (text.length > MAX_MEMO_CHARS) return res.status(413).json({ error: '내용이 너무 깁니다' });
+  const rules = { text, updatedAt: Date.now() };
+  await setState('sanctionRules', rules);
+  res.json({ ok: true, sanctionRules: rules });
+});
+
 function cleanTitle(t) { return String(t == null ? '' : t).trim().slice(0, 20); }
 
 app.post('/api/memos', async (req, res) => {

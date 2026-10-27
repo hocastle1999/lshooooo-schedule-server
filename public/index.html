@@ -160,6 +160,10 @@
   .overlay{position:fixed;inset:0;background:rgba(10,12,14,.5);display:flex;align-items:center;justify-content:center;padding:16px;z-index:20;}
   .modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);width:100%;max-width:380px;padding:18px;display:flex;flex-direction:column;gap:12px;max-height:88vh;overflow-y:auto;}
   .modal h3{margin:0;font-size:16px;}
+  .modal.wide{max-width:640px;}
+  .rules-text{white-space:pre-wrap;word-break:break-word;font-size:14px;line-height:1.7;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;}
+  .rules-edit{min-height:55vh;font:inherit;font-size:14px;line-height:1.6;}
+  button.tool-btn{font:inherit;font-size:13px;font-weight:700;cursor:pointer;}
   .field{display:flex;flex-direction:column;gap:4px;}
   .field label{font-size:11.5px;color:var(--text-dim);}
   .field input,.field textarea{font:inherit;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);resize:vertical;}
@@ -184,7 +188,7 @@
 <script>
 (function(){
   "use strict";
-  var STATE = { events:{}, notices:[], unscheduled:[], memos:[], files:[], worlds:{matches:[],updatedLabel:'',sourceUrl:''}, managers:{live:false,state:'',list:[]}, meta:{streamer:'이상호', boardUrl:'', crawledAtLabel:''} };
+  var STATE = { events:{}, notices:[], unscheduled:[], memos:[], files:[], worlds:{matches:[],updatedLabel:'',sourceUrl:''}, managers:{live:false,state:'',list:[]}, sanctionRules:{text:''}, meta:{streamer:'이상호', boardUrl:'', crawledAtLabel:''} };
   var LINKS = [
     { label: '🔗 딥롤', url: 'https://www.deeplol.gg/aram?hl=ko' },
     { label: '🔗 숲롤', url: 'https://www.sooplol.com/' },
@@ -490,6 +494,7 @@
           '<span class="eyebrow">SOOP · '+esc(STATE.meta.streamer)+' 매니저</span>'+
           '<div class="title-row"><img class="title-icon" src="/icons/icon-schedule.png" alt=""><h1>'+esc(STATE.meta.streamer)+' 매니저 작업실</h1>'+
             TOOLS.map(function(l){ return '<a class="tool-btn" href="'+esc(l.url)+'" target="_blank" rel="noopener">'+esc(l.label)+'</a>'; }).join('')+
+            '<button type="button" class="tool-btn" data-action="open-rules">📋 제재 기준</button>'+
           '</div>'+
           '<div class="mgr-row">'+managersHTML()+'</div>'+
         '</div>'+
@@ -534,6 +539,31 @@
   function showModal(innerHtml, key){
     document.getElementById('modal-slot').innerHTML = '<div class="overlay" data-action="overlay" data-key="'+key+'"><div class="modal" data-stop="1">'+innerHtml+'</div></div>';
   }
+  // 📋 제재 기준: 누르면 내용을 보여주고, '수정'으로 같은 창에서 고칠 수 있다.
+  function openRulesModal(editing){
+    var text = (STATE.sanctionRules && STATE.sanctionRules.text) || '';
+    var inner = editing
+      ? '<h3>📋 제재 기준 수정</h3>'+
+        '<form id="rules-form" class="field" style="gap:10px;">'+
+          '<textarea name="text" class="rules-edit">'+esc(text)+'</textarea>'+
+          '<div class="modal-actions"><button type="button" class="btn" data-action="open-rules">취소</button><button type="submit" class="btn primary">저장</button></div>'+
+        '</form>'
+      : '<h3>📋 제재 기준</h3>'+
+        '<div class="rules-text">'+(text ? esc(text) : '<span style="color:var(--text-dim)">아직 적힌 내용이 없어요. 수정을 눌러 적어주세요.</span>')+'</div>'+
+        '<div class="modal-actions"><button type="button" class="btn" data-action="close-modal">닫기</button><button type="button" class="btn primary" data-action="edit-rules">수정</button></div>';
+    showModal(inner, '');
+    document.querySelector('#modal-slot .modal').classList.add('wide');
+    if(editing){ var ta=document.querySelector('#rules-form textarea'); if(ta) ta.focus(); }
+  }
+  async function saveRules(text){
+    try {
+      var r = await api('POST', '/api/sanction-rules', {text:text});
+      STATE.sanctionRules = r.sanctionRules;
+      openRulesModal(false);
+      toast('제재 기준을 저장했어요');
+    } catch(e){ toast('저장 실패: '+e.message); }
+  }
+
   function closeModal(){
     var slot=document.getElementById('modal-slot');
     if(slot) slot.innerHTML='';
@@ -569,6 +599,7 @@
     STATE.worlds = data.worlds || {matches:[],updatedLabel:'',sourceUrl:''};
     STATE.meta = data.meta || STATE.meta;
     STATE.managers = data.managers || STATE.managers;
+    STATE.sanctionRules = data.sanctionRules || STATE.sanctionRules;
     render();
   }
 
@@ -835,6 +866,8 @@
     if(action==='memo-tab'){ selectMemo(el.getAttribute('data-id')); return; }
     if(action==='memo-add'){ stashMemoDraft(); openMemoPageModal(null); return; }
     if(action==='memo-rename'){ var mp=(STATE.memos||[]).find(function(x){return x.id===el.getAttribute('data-id');}); if(mp) openMemoPageModal(mp); return; }
+    if(action==='open-rules'){ openRulesModal(false); return; }
+    if(action==='edit-rules'){ openRulesModal(true); return; }
     if(action==='toggle-help'){ var hk=el.getAttribute('data-key'); helpOpen[hk]=!helpOpen[hk]; stashMemoDraft(); render(); return; }
     if(action==='memo-move'){ moveMemo(el.getAttribute('data-id'), Number(el.getAttribute('data-dir'))); return; }
     if(action==='memo-delete'){ deleteMemoPage(el.getAttribute('data-id')); return; }
@@ -927,6 +960,12 @@
       ev.preventDefault();
       var fd5 = new FormData(memoForm);
       saveMemo(fd5.get('id'), fd5.get('memo')||'', false);
+      return;
+    }
+    var rulesForm = ev.target.closest('#rules-form');
+    if(rulesForm){
+      ev.preventDefault();
+      saveRules(new FormData(rulesForm).get('text') || '');
       return;
     }
     var memoPageForm = ev.target.closest('#memo-page-form');
