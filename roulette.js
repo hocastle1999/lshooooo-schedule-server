@@ -8,18 +8,17 @@
 //   - 집계/설정은 store(Upstash)에 저장돼서, 서버가 재시작되거나 재배포돼도
 //     명단이 그대로 남고 수집 중이었으면 자동으로 다시 접속한다.
 //   - 수집 중지/다른 스트리머로 변경이 된다 (exe 는 실행당 한 번만 연결 가능했음).
-//   - Render 무료 플랜은 15분간 접속이 없으면 잠들어서 채팅 연결도 끊기므로,
-//     수집 중에는 10분마다 자기 자신에게 요청을 보내 깨어 있게 한다.
+//   - 수집 중에는 서버가 잠들지 않게 한다 (keepawake.js).
 
 const { SoopChat } = require('./soop-chat');
 const { getState, setState } = require('./store');
+const keepAwake = require('./keepawake');
 
 const CATEGORIES = ['별풍선', '애드벌룬', '도전미션', '대결미션'];
 const STATE_KEY = 'roulette';
 const LOG_KEY = 'roulette_log';
 const MAX_LOG_ROWS = 3000;
 const SAVE_DELAY_MS = 1500;
-const KEEP_AWAKE_MS = 10 * 60 * 1000;
 
 // svc 121(미션 별풍선)의 type 값 — 2026-09-19 실제 방송 로그로 확인됨.
 const MISSION_CHALLENGE = 'CHALLENGE_GIFT'; // 도전미션
@@ -43,7 +42,6 @@ let log = []; // [[시간, 종류, 아이디, 닉네임, 개수, 미션제목, �
 let chat = null;
 let chatStatus = { state: 'idle', message: '대기 중', title: '' };
 let saveTimer = null;
-let keepAwakeTimer = null;
 let loading = null;
 
 // ---- 계산 (aggregator.go 와 동일) ----
@@ -194,19 +192,11 @@ function startChat() {
     console.log(`[roulette] ${state.streamer}: ${s.state} - ${s.message}`);
   });
   chat.on('packet', onPacket);
-
-  clearInterval(keepAwakeTimer);
-  const selfUrl = process.env.RENDER_EXTERNAL_URL;
-  if (selfUrl) {
-    keepAwakeTimer = setInterval(() => {
-      fetch(selfUrl + '/api/roulette/ping', { signal: AbortSignal.timeout(15000) }).catch(() => {});
-    }, KEEP_AWAKE_MS);
-  }
+  keepAwake.acquire('roulette');
 }
 
 function stopChat() {
-  clearInterval(keepAwakeTimer);
-  keepAwakeTimer = null;
+  keepAwake.release('roulette');
   if (chat) {
     chat.removeAllListeners();
     chat.stop();
@@ -249,8 +239,6 @@ function csvCell(v) {
 }
 
 function mount(app) {
-  app.get('/api/roulette/ping', (req, res) => res.json({ ok: true }));
-
   app.get('/api/roulette', async (req, res) => {
     await ensureLoaded();
     res.json(snapshot());

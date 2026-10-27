@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>제재 이력 참여자</title>
+<style>
+  :root{
+    --bg:#F4F5F3;
+    --surface:#FFFFFF;
+    --surface-2:#EBEDEA;
+    --border:#DADDD8;
+    --text:#161A17;
+    --text-dim:#5B655E;
+    --accent:#0E9C8A;
+    --accent-ink:#04352F;
+    --accent-soft:#D9F2EC;
+    --warm:#E08A2C;
+    --warm-soft:#FBE7CE;
+    --danger:#C24545;
+    --danger-soft:#F8E1E1;
+    --ok:#1F9D55;
+    --shadow: 0 1px 2px rgba(20,24,22,.06), 0 8px 24px -12px rgba(20,24,22,.18);
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#12151A; --surface:#191E24; --surface-2:#20262E; --border:#2B333C;
+      --text:#EDF1F4; --text-dim:#8D99A6; --accent:#33D9C2; --accent-ink:#C9FBF3;
+      --accent-soft:#173A36; --warm:#F0A94E; --warm-soft:#3A2A14; --danger:#E17777; --danger-soft:#3A1E1E; --ok:#4ADE80;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 28px -14px rgba(0,0,0,.6);
+      color-scheme: dark;
+    }
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);}
+  body{font-family:"Gothic A1","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;}
+  #app{max-width:1080px;margin:0 auto;padding:20px 16px 48px;display:flex;flex-direction:column;gap:18px;}
+  .top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;}
+  .brand{display:flex;flex-direction:column;gap:4px;}
+  .brand .eyebrow{font-size:11px;letter-spacing:.14em;color:var(--accent);font-weight:700;text-decoration:none;}
+  .brand .eyebrow:hover{text-decoration:underline;}
+  .brand h1{font-weight:800;font-size:clamp(22px,4vw,30px);margin:0;letter-spacing:-.01em;}
+  .brand p{margin:0;color:var(--text-dim);font-size:13px;}
+  .status-pill{display:inline-flex;align-items:center;gap:8px;padding:7px 12px;border-radius:999px;background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow);font-size:12.5px;color:var(--text-dim);max-width:100%;}
+  .status-pill span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--text-dim);flex:none;}
+  .dot.live{background:var(--ok);}
+  .dot.connecting,.dot.reconnecting,.dot.offline{background:var(--warm);}
+  .dot.error{background:var(--danger);}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:16px;min-width:0;}
+  .controls{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px 16px;}
+  .ctl{display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:var(--text-dim);font-weight:600;}
+  select,input[type=number]{padding:8px 10px;border:1px solid var(--border);border-radius:10px;font:inherit;font-size:14px;background:var(--surface-2);color:var(--text);}
+  input[type=number]{width:90px;}
+  .stats{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12.5px;color:var(--text-dim);margin-top:12px;}
+  .stats b{color:var(--text);font-variant-numeric:tabular-nums;}
+  button{font:inherit;cursor:pointer;}
+  .btn{border:1px solid var(--border);background:var(--surface-2);color:var(--text);border-radius:10px;padding:9px 16px;font-size:13.5px;font-weight:700;}
+  .btn:hover{border-color:var(--accent);color:var(--accent);}
+  .btn:disabled{opacity:.55;cursor:default;}
+  .btn-primary{background:var(--accent);border-color:var(--accent);color:#fff;margin-left:auto;}
+  .btn-primary:hover{color:#fff;filter:brightness(1.08);}
+  .btn-primary.stop{background:var(--danger);border-color:var(--danger);}
+  .error{margin-top:10px;padding:9px 11px;border-radius:10px;background:var(--warm-soft);color:var(--danger);font-size:12.5px;}
+  h2{font-weight:800;font-size:16px;margin:0 0 12px;display:flex;align-items:center;gap:8px;}
+  .badge{font-size:11.5px;font-weight:700;color:var(--danger);background:var(--danger-soft);padding:2px 8px;border-radius:6px;}
+  .table-wrap{overflow-x:auto;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th,td{text-align:left;padding:9px 9px;border-bottom:1px solid var(--border);white-space:nowrap;}
+  th{color:var(--text-dim);font-weight:600;font-size:12px;}
+  td.name{white-space:normal;word-break:break-all;min-width:150px;}
+  .num{text-align:right;font-variant-numeric:tabular-nums;}
+  .total{color:var(--danger);font-weight:800;font-size:14px;}
+  tr.row{cursor:pointer;}
+  tr.row:hover td{background:var(--surface-2);}
+  .new{display:inline-block;margin-left:6px;font-size:11px;font-weight:700;color:var(--warm);background:var(--warm-soft);padding:1px 6px;border-radius:5px;}
+  .uid{color:var(--text-dim);}
+  tr.detail td{background:var(--surface-2);white-space:normal;padding:10px 12px;}
+  .hist{display:flex;flex-wrap:wrap;gap:6px;}
+  .hist span{font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:3px 8px;}
+  .hist .k{color:var(--danger);font-weight:700;}
+  .empty td{text-align:center;color:var(--text-dim);padding:32px 8px;white-space:normal;}
+  .hint{font-size:12px;color:var(--text-dim);line-height:1.6;margin-top:10px;}
+  .hint a{color:var(--accent);}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="top">
+    <div class="brand">
+      <a class="eyebrow" href="/">← 방송 일정으로</a>
+      <h1>제재 이력 참여자</h1>
+      <p>지금 방송에 들어와 있는 참여자 중 최근 제재(강퇴·채금)를 많이 받은 사람</p>
+    </div>
+    <div class="status-pill"><span class="dot" id="statusDot"></span><span id="statusText">불러오는 중…</span></div>
+  </div>
+
+  <section class="card">
+    <div class="controls">
+      <label class="ctl">기간
+        <select id="days">
+          <option value="7">최근 7일</option>
+          <option value="14">최근 14일</option>
+          <option value="30" selected>최근 30일</option>
+          <option value="60">최근 60일</option>
+          <option value="90">최근 90일</option>
+        </select>
+      </label>
+      <label class="ctl">제재 건수
+        <span><input type="number" id="min" min="1" value="10"> 건 이상</span>
+      </label>
+      <button class="btn btn-primary" id="toggleBtn" disabled>확인 시작</button>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="error" id="errorBox" hidden></div>
+  </section>
+
+  <section class="card">
+    <h2>해당 참여자 <span class="badge" id="countBadge">0명</span></h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>닉네임(아이디)</th><th class="num" id="periodHead">최근 30일</th><th class="num">강퇴</th><th class="num">채금</th>
+          <th class="num">90일 전체</th><th>마지막 제재</th>
+        </tr></thead>
+        <tbody id="body"><tr class="empty"><td colspan="6">불러오는 중…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="hint">
+      줄을 누르면 제재 내역이 펼쳐집니다. <span class="new">새로 입장</span>은 확인을 켠 뒤에 들어온 사람입니다.<br>
+      제재 기록은 <a href="https://www.trackify.kr/soop/lshooooo?tab=sanctions" target="_blank" rel="noopener noreferrer">트래키파이</a>에 공개된 이 방송의 기록(최근 90일)이고, 켜져 있는 동안 15분마다 새로 받아옵니다.
+      참여자 목록에는 로그인한 시청자만 나옵니다.
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var $ = function(id){ return document.getElementById(id); };
+  var daysEl=$('days'), minEl=$('min'), toggleBtn=$('toggleBtn');
+  var current=null, busy=false, pollTimer=null, open={};
+
+  try {
+    var saved = JSON.parse(localStorage.getItem('watch-filter') || '{}');
+    if (saved.days) daysEl.value = saved.days;
+    if (saved.min) minEl.value = saved.min;
+  } catch(e) {}
+
+  function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  function fmt(n){return Number(n||0).toLocaleString('ko-KR');}
+  function pad(n){return String(n).padStart(2,'0');}
+  function hm(ts){var d=new Date(ts);return pad(d.getHours())+':'+pad(d.getMinutes());}
+  function ago(ts){
+    var m=Math.round((Date.now()-ts)/60000);
+    if (m<1) return '방금'; if (m<60) return m+'분 전';
+    var h=Math.round(m/60); if (h<24) return h+'시간 전';
+    return Math.round(h/24)+'일 전';
+  }
+  // 트래키파이 시각(한국 시간 "2026-10-27T08:07:00") → "10/27 08:07"
+  function kst(s){ return s ? s.slice(5,7)+'/'+s.slice(8,10)+' '+s.slice(11,16) : '-'; }
+  function showError(msg){ $('errorBox').textContent=msg; $('errorBox').hidden=!msg; }
+
+  var STATUS_LABEL = { idle:'꺼져 있음', connecting:'연결 중', live:'확인 중', offline:'방송 대기 중', reconnecting:'재연결 중', error:'오류' };
+
+  function render(d){
+    current = d;
+    var st = d.status || {state:'idle'};
+    $('statusDot').className = 'dot ' + (d.active ? st.state : 'idle');
+    var label = d.active ? (STATUS_LABEL[st.state]||st.state) : '꺼져 있음';
+    if (d.active && st.state==='live' && st.title) label += ' · ' + st.title;
+    $('statusText').textContent = label;
+    $('statusText').title = st.message || '';
+
+    toggleBtn.disabled = busy;
+    toggleBtn.textContent = d.active ? '확인 중지' : '확인 시작';
+    toggleBtn.classList.toggle('stop', d.active);
+
+    var s = d.sanctions;
+    var stats = [];
+    if (d.active) stats.push('지금 참여자 <b>'+fmt(d.viewerCount)+'</b>명');
+    stats.push('제재 기록 <b>'+fmt(s.count)+'</b>건 (최근 '+s.keepDays+'일)');
+    stats.push(s.syncing ? '제재 기록 받는 중…' : (s.syncedAt ? '기록 갱신 '+ago(s.syncedAt) : '아직 기록을 받지 않음'));
+    $('stats').innerHTML = stats.map(function(x){return '<span>'+x+'</span>';}).join('');
+    showError(s.error || (d.active && st.state==='error' ? st.message : ''));
+
+    $('periodHead').textContent = '최근 '+d.days+'일';
+    $('countBadge').textContent = d.list.length + '명';
+
+    var body = $('body');
+    if (!d.active) {
+      body.innerHTML = '<tr class="empty"><td colspan="6">‘확인 시작’을 누르면 방송 채팅방에 들어가 지금 참여자를 확인합니다.</td></tr>';
+      return;
+    }
+    if (st.state!=='live') {
+      body.innerHTML = '<tr class="empty"><td colspan="6">'+esc(st.message||'연결 중…')+'</td></tr>';
+      return;
+    }
+    if (!d.list.length) {
+      body.innerHTML = '<tr class="empty"><td colspan="6">지금 참여자 중 최근 '+d.days+'일 동안 제재 '+d.min+'건 이상인 사람이 없습니다.</td></tr>';
+      return;
+    }
+    body.innerHTML = d.list.map(function(u){
+      var name = esc(u.nick) + (u.id!==u.nick ? ' <span class="uid">('+esc(u.id)+')</span>' : '');
+      if (u.joinedAt) name += '<span class="new" title="'+hm(u.joinedAt)+' 입장">새로 입장 '+hm(u.joinedAt)+'</span>';
+      var row = '<tr class="row" data-id="'+esc(u.id)+'"><td class="name">'+name+'</td>'+
+        '<td class="num total">'+fmt(u.total)+'</td><td class="num">'+fmt(u.kicks)+'</td><td class="num">'+fmt(u.mutes)+'</td>'+
+        '<td class="num">'+fmt(u.allTime)+'</td><td>'+kst(u.last)+'</td></tr>';
+      if (open[u.id]) {
+        row += '<tr class="detail"><td colspan="6"><div class="hist">'+u.recent.map(function(r){
+          return '<span><span class="'+(r.type==='K'?'k':'')+'">'+(r.type==='K'?'강퇴':'채금')+'</span> '+kst(r.at)+(r.by?' · '+esc(r.by):'')+'</span>';
+        }).join('')+(u.total>u.recent.length ? '<span>외 '+(u.total-u.recent.length)+'건</span>' : '')+'</div></td></tr>';
+      }
+      return row;
+    }).join('');
+  }
+
+  $('body').addEventListener('click', function(e){
+    var tr = e.target.closest('tr.row');
+    if (!tr) return;
+    var id = tr.getAttribute('data-id');
+    open[id] = !open[id];
+    if (current) render(current);
+  });
+
+  async function poll(){
+    clearTimeout(pollTimer);
+    try {
+      var res = await fetch('/api/watch?days='+encodeURIComponent(daysEl.value)+'&min='+encodeURIComponent(minEl.value||10));
+      render(await res.json());
+    } catch(e){ $('statusText').textContent='서버와 연결할 수 없음'; $('statusDot').className='dot error'; }
+    pollTimer = setTimeout(poll, 3000);
+  }
+
+  function onFilter(){
+    try { localStorage.setItem('watch-filter', JSON.stringify({days:daysEl.value, min:minEl.value})); } catch(e) {}
+    poll();
+  }
+  daysEl.addEventListener('change', onFilter);
+  minEl.addEventListener('change', onFilter);
+
+  toggleBtn.addEventListener('click', async function(){
+    if (!current) return;
+    busy = true; toggleBtn.disabled = true;
+    try {
+      await fetch(current.active ? '/api/watch/stop' : '/api/watch/start', { method:'POST' });
+      await poll();
+    } catch(e){ showError(e.message); }
+    finally { busy = false; toggleBtn.disabled = false; }
+  });
+
+  poll();
+})();
+</script>
+</body>
+</html>
