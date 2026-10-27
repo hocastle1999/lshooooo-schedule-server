@@ -43,6 +43,7 @@
   .brand h1{font-weight:800;font-size:clamp(22px,4vw,30px);margin:0;letter-spacing:-.01em;}
   .title-row{display:flex;align-items:center;gap:8px 10px;flex-wrap:wrap;}
   .title-row h1{margin-right:6px;}
+  .title-icon{width:clamp(36px,5vw,46px);height:clamp(36px,5vw,46px);border-radius:50%;flex:none;box-shadow:0 0 0 2px var(--accent-soft);margin-right:-2px;}
   .tool-btn{display:inline-flex;align-items:center;padding:7px 14px;border-radius:999px;border:1px solid var(--accent);background:var(--accent-soft);color:var(--accent-ink);font-size:13px;font-weight:700;text-decoration:none;box-shadow:var(--shadow);white-space:nowrap;}
   .tool-btn:hover{filter:brightness(1.08);}
   .mgr{display:inline-flex;align-items:center;gap:6px 8px;flex-wrap:wrap;justify-content:flex-start;padding:7px 10px 7px 12px;border-radius:18px;background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow);font-size:12.5px;color:var(--text-dim);max-width:100%;}
@@ -487,7 +488,7 @@
       '<div class="top">'+
         '<div class="brand">'+
           '<span class="eyebrow">SOOP · '+esc(STATE.meta.streamer)+' 매니저</span>'+
-          '<div class="title-row"><h1>'+esc(STATE.meta.streamer)+' 매니저 작업실</h1>'+
+          '<div class="title-row"><img class="title-icon" src="/icons/icon-schedule.png" alt=""><h1>'+esc(STATE.meta.streamer)+' 매니저 작업실</h1>'+
             TOOLS.map(function(l){ return '<a class="tool-btn" href="'+esc(l.url)+'" target="_blank" rel="noopener">'+esc(l.label)+'</a>'; }).join('')+
           '</div>'+
           '<div class="mgr-row">'+managersHTML()+'</div>'+
