@@ -112,6 +112,11 @@
   .memo-tab:hover{border-color:var(--accent);color:var(--text);}
   .memo-tab.active{background:var(--accent);border-color:var(--accent);color:#06231F;font-weight:700;}
   .memo-tab.add{padding:5px 10px;border-style:dashed;}
+  .memo-tab[draggable="true"]{cursor:grab;}
+  .memo-tab.dragging{opacity:.4;}
+  .memo-tab.drop-before{box-shadow:-3px 0 0 var(--accent);}
+  .memo-tab.drop-after{box-shadow:3px 0 0 var(--accent);}
+  .memo-move{padding:8px 10px;}
   .memo-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;}
   .memo-saved{font-size:11.5px;color:var(--text-dim);}
   .file-list{display:flex;flex-direction:column;gap:8px;margin-bottom:10px;}
@@ -300,7 +305,7 @@
   function memoHTML(){
     var page = currentMemoPage();
     var tabs = (STATE.memos||[]).map(function(p){
-      return '<button type="button" class="memo-tab'+(page && p.id===page.id?' active':'')+'" data-action="memo-tab" data-id="'+esc(p.id)+'">'+esc(p.title)+'</button>';
+      return '<button type="button" class="memo-tab'+(page && p.id===page.id?' active':'')+'" data-action="memo-tab" data-id="'+esc(p.id)+'" draggable="true" title="끌어서 순서 바꾸기">'+esc(p.title)+'</button>';
     }).join('')+'<button type="button" class="memo-tab add" data-action="memo-add" title="페이지 추가" aria-label="페이지 추가">＋</button>';
     var body = '<div class="empty">메모 페이지가 없어요.</div>';
     if(page){
@@ -311,6 +316,8 @@
         '<textarea class="memo-box" name="memo" placeholder="'+esc(page.title)+' 메모를 자유롭게 적어두세요">'+esc(text)+'</textarea>'+
         '<div class="memo-foot"><span class="memo-saved" id="memo-saved-label">'+(dirty?'입력 중… (자동 저장)':'')+'</span>'+
           '<span style="display:flex;gap:6px;">'+
+            '<button type="button" class="btn memo-move" data-action="memo-move" data-id="'+esc(page.id)+'" data-dir="-1" title="왼쪽으로 옮기기" aria-label="왼쪽으로 옮기기">◀</button>'+
+            '<button type="button" class="btn memo-move" data-action="memo-move" data-id="'+esc(page.id)+'" data-dir="1" title="오른쪽으로 옮기기" aria-label="오른쪽으로 옮기기">▶</button>'+
             '<button type="button" class="btn" data-action="memo-rename" data-id="'+esc(page.id)+'">이름 바꾸기</button>'+
             '<button type="button" class="btn" data-action="memo-delete" data-id="'+esc(page.id)+'">페이지 삭제</button>'+
             '<button type="submit" class="btn primary">저장</button>'+
@@ -319,7 +326,7 @@
     }
     return '<section class="card">'+
       '<h2 style="font-weight:800;font-size:17px;margin:0 0 3px;">메모장</h2>'+
-      '<p class="updated" style="margin:0 0 12px;">일정, CK, 매크로 등 페이지별로 나눠 적어두는 메모장입니다. 같이 쓰는 사람 모두에게 보입니다.</p>'+
+      '<p class="updated" style="margin:0 0 12px;">일정, CK, 매크로 등 페이지별로 나눠 적어두는 메모장입니다. 같이 쓰는 사람 모두에게 보입니다. 탭은 끌어서(또는 ◀ ▶ 버튼으로) 순서를 바꿀 수 있어요.</p>'+
       '<div class="memo-tabs">'+tabs+'</div>'+body+
     '</section>';
   }
@@ -644,6 +651,65 @@
       render();
     } catch(e){ toast('저장 실패: '+e.message); }
   }
+  // 메모 페이지(탭) 순서 바꾸기: 화면에 먼저 반영하고 서버에 저장한다.
+  async function reorderMemos(ids){
+    stashMemoDraft();
+    var byId = {};
+    (STATE.memos||[]).forEach(function(m){ byId[m.id] = m; });
+    STATE.memos = ids.map(function(id){ return byId[id]; }).filter(Boolean);
+    render();
+    try {
+      var r = await api('POST', '/api/memo-order', {ids: ids});
+      STATE.memos = r.memos || STATE.memos;
+      render();
+    } catch(e){ toast('순서 저장 실패: '+e.message); loadState(); }
+  }
+  function moveMemo(id, dir){
+    var ids = (STATE.memos||[]).map(function(m){ return m.id; });
+    var i = ids.indexOf(id), j = i + dir;
+    if(i < 0 || j < 0 || j >= ids.length) return;
+    ids.splice(i, 1); ids.splice(j, 0, id);
+    reorderMemos(ids);
+  }
+  // 탭 끌어서 옮기기 (마우스). 놓는 위치가 탭의 왼쪽 절반이면 앞에, 오른쪽 절반이면 뒤에 넣는다.
+  var dragMemoId = null;
+  function clearDropMarks(){
+    document.querySelectorAll('.memo-tab.drop-before,.memo-tab.drop-after').forEach(function(t){ t.classList.remove('drop-before','drop-after'); });
+  }
+  document.addEventListener('dragstart', function(ev){
+    var tab = ev.target.closest && ev.target.closest('.memo-tab[draggable="true"]');
+    if(!tab) return;
+    dragMemoId = tab.getAttribute('data-id');
+    tab.classList.add('dragging');
+    try { ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', dragMemoId); } catch(e){}
+  });
+  document.addEventListener('dragover', function(ev){
+    if(!dragMemoId) return;
+    var tab = ev.target.closest && ev.target.closest('.memo-tab[draggable="true"]');
+    clearDropMarks();
+    if(!tab || tab.getAttribute('data-id')===dragMemoId) return;
+    ev.preventDefault();
+    var r = tab.getBoundingClientRect();
+    tab.classList.add(ev.clientX < r.left + r.width/2 ? 'drop-before' : 'drop-after');
+  });
+  document.addEventListener('drop', function(ev){
+    if(!dragMemoId) return;
+    var tab = ev.target.closest && ev.target.closest('.memo-tab[draggable="true"]');
+    var from = dragMemoId;
+    if(!tab || tab.getAttribute('data-id')===from) return;
+    ev.preventDefault();
+    var after = tab.classList.contains('drop-after');
+    var ids = (STATE.memos||[]).map(function(m){ return m.id; }).filter(function(id){ return id!==from; });
+    var at = ids.indexOf(tab.getAttribute('data-id')) + (after ? 1 : 0);
+    ids.splice(at, 0, from);
+    dragMemoId = null; clearDropMarks();
+    reorderMemos(ids);
+  });
+  document.addEventListener('dragend', function(){
+    dragMemoId = null; clearDropMarks();
+    document.querySelectorAll('.memo-tab.dragging').forEach(function(t){ t.classList.remove('dragging'); });
+  });
+
   async function deleteMemoPage(id){
     var p = (STATE.memos||[]).find(function(x){return x.id===id;});
     if(!window.confirm('"'+(p?p.title:'이 페이지')+'" 페이지와 안의 메모를 삭제할까요? 되돌릴 수 없어요.')) return;
@@ -710,6 +776,7 @@
     if(action==='memo-tab'){ selectMemo(el.getAttribute('data-id')); return; }
     if(action==='memo-add'){ stashMemoDraft(); openMemoPageModal(null); return; }
     if(action==='memo-rename'){ var mp=(STATE.memos||[]).find(function(x){return x.id===el.getAttribute('data-id');}); if(mp) openMemoPageModal(mp); return; }
+    if(action==='memo-move'){ moveMemo(el.getAttribute('data-id'), Number(el.getAttribute('data-dir'))); return; }
     if(action==='memo-delete'){ deleteMemoPage(el.getAttribute('data-id')); return; }
     if(action==='file-pick'){ var fi=document.getElementById('file-input'); if(fi) fi.click(); return; }
     if(action==='file-delete'){ deleteFile(el.getAttribute('data-id')); return; }

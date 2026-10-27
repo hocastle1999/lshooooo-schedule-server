@@ -77,6 +77,17 @@ app.post('/api/memos', async (req, res) => {
   res.json({ ok: true, memos, id: page.id });
 });
 
+// 페이지(탭) 순서 바꾸기. ids 에 없는 페이지(그 사이 다른 사람이 추가한 것 등)는 뒤에 그대로 둔다.
+app.post('/api/memo-order', async (req, res) => {
+  const ids = Array.isArray((req.body || {}).ids) ? req.body.ids.map(String) : null;
+  if (!ids) return res.status(400).json({ error: '순서 정보가 필요합니다' });
+  const memos = await loadMemos();
+  const rank = (m) => { const i = ids.indexOf(m.id); return i < 0 ? ids.length : i; };
+  const next = memos.map((m, i) => ({ m, i })).sort((a, b) => rank(a.m) - rank(b.m) || a.i - b.i).map((x) => x.m);
+  await setState('memos', next);
+  res.json({ ok: true, memos: next });
+});
+
 // 한 페이지의 내용 또는 이름만 수정 (다른 사람이 쓰는 다른 페이지는 건드리지 않음)
 app.post('/api/memos/:id', async (req, res) => {
   const { id } = req.params;
