@@ -88,6 +88,11 @@
   .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;align-items:center;}
   .copied{font-size:12px;color:var(--ok);opacity:0;transition:opacity .2s;}
   .copied.show{opacity:1;}
+  .uid{color:var(--text-dim);}
+  .copy{font:inherit;color:inherit;background:none;border:1px dashed transparent;border-radius:6px;padding:1px 4px;margin:-1px -2px;cursor:copy;}
+  .copy:hover{border-color:var(--accent);color:var(--accent);}
+  .copy.done{border-color:var(--ok);color:var(--ok);}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--text);color:var(--bg);font-size:13px;font-weight:600;padding:9px 16px;border-radius:999px;box-shadow:var(--shadow);z-index:30;pointer-events:none;}
   .head-actions{margin-left:auto;display:flex;gap:6px;}
   .head-actions .btn{padding:5px 10px;font-size:12px;}
   .sort{display:inline-flex;border:1px solid var(--border);border-radius:10px;overflow:hidden;}
@@ -157,7 +162,7 @@
           <a class="btn" href="https://lazygyu.github.io/roulette" target="_blank" rel="noopener noreferrer">룰렛 사이트 열기 ↗</a>
           <span class="copied" id="copied">복사됐습니다!</span>
         </div>
-        <div class="hint">명단을 복사한 뒤 <a href="https://lazygyu.github.io/roulette" target="_blank" rel="noopener noreferrer">lazygyu.github.io/roulette</a> 이름 입력창에 붙여넣으세요. <b>*숫자</b>만큼 당첨 확률이 올라갑니다.</div>
+        <div class="hint">명단을 복사한 뒤 <a href="https://lazygyu.github.io/roulette" target="_blank" rel="noopener noreferrer">lazygyu.github.io/roulette</a> 이름 입력창에 붙여넣으세요. <b>*숫자</b>만큼 당첨 확률이 올라갑니다. 위 표의 닉네임이나 아이디를 누르면 그 사람만 복사돼요.</div>
       </section>
     </div>
   </div>
@@ -235,7 +240,8 @@
       : function(a,b){ return (b.total-a.total) || (b.lastAt-a.lastAt); });
     $('body').innerHTML = rows.length ? rows.map(function(e){
       var c = e.counts || {};
-      var name = e.id && e.id!==e.name ? esc(e.name)+'('+esc(e.id)+')' : esc(e.name);
+      var name = '<button type="button" class="copy" data-copy="'+esc(e.name)+'" title="닉네임 복사">'+esc(e.name)+'</button>' +
+        (e.id && e.id!==e.name ? '<span class="uid">(<button type="button" class="copy" data-copy="'+esc(e.id)+'" title="아이디 복사">'+esc(e.id)+'</button>)</span>' : '');
       return '<tr><td class="name">'+name+'</td>'+
         CATS.map(function(k){ return '<td class="num">'+fmt(c[k])+'</td>'; }).join('')+
         '<td class="num">'+fmt(e.total)+'</td>'+
@@ -282,6 +288,26 @@
     if (!confirm('정말 초기화할까요? 지금까지 모은 후원 명단이 모두 지워집니다.\n(수집은 계속되고, 이후 후원은 처음부터 다시 쌓입니다)')) return;
     try { render(await api('/api/roulette/reset', {})); }
     catch(e){ alert('초기화 실패: '+e.message); }
+  });
+
+  function toast(msg){
+    var old = document.querySelector('.toast'); if (old) old.remove();
+    var t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(function(){ t.remove(); }, 1400);
+  }
+  // 표의 닉네임/아이디를 누르면 복사
+  $('body').addEventListener('click', async function(e){
+    var btn = e.target.closest('[data-copy]');
+    if (!btn) return;
+    var text = btn.getAttribute('data-copy');
+    try { await navigator.clipboard.writeText(text); }
+    catch(err){
+      var ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta);
+      ta.select(); document.execCommand('copy'); ta.remove();
+    }
+    btn.classList.add('done');
+    toast('“' + text + '” 복사했어요');
   });
 
   $('copyBtn').addEventListener('click', async function(){
