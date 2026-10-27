@@ -188,7 +188,8 @@
 
     var body = $('body');
     if (st.state!=='live') {
-      body.innerHTML = '<tr class="empty"><td colspan="6">'+esc(st.message||'연결 중…')+'</td></tr>';
+      var msg = st.state==='offline' ? '방송이 꺼져 있어요. 방송이 켜지면 자동으로 참여자를 다시 확인합니다.' : (st.message||'연결 중…');
+      body.innerHTML = '<tr class="empty"><td colspan="6">'+esc(msg)+'</td></tr>';
       return;
     }
     if (!d.list.length) {
