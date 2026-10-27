@@ -5,6 +5,7 @@ const { runWorldsCrawl } = require('./worlds');
 const { getState, setState, deleteState } = require('./store');
 const roulette = require('./roulette');
 const watch = require('./watch');
+const broadcasts = require('./broadcasts');
 const keepAwake = require('./keepawake');
 
 const app = express();
@@ -29,6 +30,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 keepAwake.mount(app);
 roulette.mount(app);
 watch.mount(app);
+broadcasts.mount(app);
 
 app.get('/api/state', async (req, res) => {
   const [events, notices, unscheduled, memos, meta, files, worlds] = await Promise.all([

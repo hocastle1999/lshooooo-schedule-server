@@ -80,6 +80,7 @@
   .grid .day:nth-child(7n+1) .num{color:var(--sun);}
   .grid .day:nth-child(7n) .num{color:var(--sat);}
   .grid .day.today .num{color:var(--warm);font-weight:700;}
+  .day .bc{font-size:10px;margin-left:4px;vertical-align:1px;}
   .day .pills{display:flex;flex-direction:column;gap:4px;}
   .pill{background:var(--accent-soft);color:var(--accent-ink);border-radius:6px;padding:3px 6px;font-size:11.5px;line-height:1.3;min-width:0;flex:none;}
   .pill .pt{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;white-space:normal;word-break:break-all;}
@@ -211,6 +212,41 @@
   }
   var MONTH_NAMES=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
 
+  // ---- 방송 여부 (트래키파이 방송 기록) ----
+  // 날짜 옆에 방송했으면 🔵, 안 했으면 ❌. 기록은 서버가 24시간마다 새로 받으므로,
+  // 마지막으로 받은 날(until)부터는 방송했을 때만 🔵 를 표시하고 ❌ 는 붙이지 않는다.
+  var BC = {};        // "시작~끝" → { at, until, days: { 날짜: {minutes, titles} } }
+  var bcWanted = null; // 지금 달력에 보이는 기간
+  function bcMark(bc, key){
+    if(!bc || !bc.days) return '';
+    var d = bc.days[key];
+    if(d){
+      var tip = '방송 '+(Math.round(d.minutes/6)/10)+'시간 · '+d.titles.join(' / ');
+      return '<span class="bc" title="'+esc(tip)+'">🔵</span>';
+    }
+    if(key >= bc.until) return '';
+    return '<span class="bc" title="방송 안 함">❌</span>';
+  }
+  async function ensureBroadcasts(force){
+    if(!bcWanted) return;
+    var k = bcWanted.from+'~'+bcWanted.to, hit = BC[k];
+    if(hit && (hit.loading || (!force && Date.now()-hit.at < 60*60*1000))) return;
+    BC[k] = Object.assign({}, hit, {loading:true});
+    try {
+      var r = await api('GET', '/api/broadcasts?from='+bcWanted.from+'&to='+bcWanted.to);
+      BC[k] = { at: Date.now(), until: r.until, days: r.days };
+    } catch(e){
+      BC[k] = Object.assign({}, hit, { at: Date.now() - 59*60*1000, loading:false }); // 1분 뒤 다시 시도
+      return;
+    }
+    // 일정 입력 중에는 다시 그리지 않는다 (다음에 그릴 때 표시됨)
+    if(document.querySelector('.overlay')) return;
+    var active = document.activeElement;
+    if(active && (active.tagName==='INPUT' || active.tagName==='TEXTAREA') && active.value) return;
+    stashMemoDraft();
+    render();
+  }
+
   function calendarHTML(){
     var y=view.y, m=view.m;
     var first=new Date(y,m,1);
@@ -230,6 +266,8 @@
       cells.push({d:j,key:dateKey(ny,nm,j),outside:true});
     }
     var tKey=todayKey();
+    bcWanted = { from: cells[0].key, to: cells[cells.length-1].key };
+    var bc = BC[bcWanted.from+'~'+bcWanted.to];
     var cellsHtml=cells.map(function(c){
       var evs=STATE.events[c.key]||[];
       var pillsHtml='';
@@ -242,7 +280,7 @@
       }
       var cls='day'+(c.outside?' outside':'')+(c.key===tKey?' today':'');
       return '<button type="button" class="'+cls+'" data-action="open-day" data-key="'+c.key+'">'+
-        '<span class="num">'+c.d+'</span>'+pillsHtml+'</button>';
+        '<span class="num">'+c.d+bcMark(bc, c.key)+'</span>'+pillsHtml+'</button>';
     }).join('');
     return '<section class="card">'+
       '<div class="cal-head"><h2>'+y+'년 '+MONTH_NAMES[m]+'</h2>'+
@@ -466,6 +504,7 @@
       '<div id="modal-slot"></div>';
     var btn = document.getElementById('refresh-btn');
     if(btn) btn.disabled = refreshing;
+    ensureBroadcasts();
   }
 
   function openDayModal(key, prefill){
