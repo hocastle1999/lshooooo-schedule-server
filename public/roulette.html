@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>후원 룰렛 명단</title>
+<style>
+  :root{
+    --bg:#F4F5F3;
+    --surface:#FFFFFF;
+    --surface-2:#EBEDEA;
+    --border:#DADDD8;
+    --text:#161A17;
+    --text-dim:#5B655E;
+    --accent:#0E9C8A;
+    --accent-ink:#04352F;
+    --accent-soft:#D9F2EC;
+    --warm:#E08A2C;
+    --warm-soft:#FBE7CE;
+    --danger:#C24545;
+    --ok:#1F9D55;
+    --shadow: 0 1px 2px rgba(20,24,22,.06), 0 8px 24px -12px rgba(20,24,22,.18);
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#12151A; --surface:#191E24; --surface-2:#20262E; --border:#2B333C;
+      --text:#EDF1F4; --text-dim:#8D99A6; --accent:#33D9C2; --accent-ink:#C9FBF3;
+      --accent-soft:#173A36; --warm:#F0A94E; --warm-soft:#3A2A14; --danger:#E17777; --ok:#4ADE80;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 28px -14px rgba(0,0,0,.6);
+      color-scheme: dark;
+    }
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);}
+  body{font-family:"Gothic A1","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;}
+  #app{max-width:1180px;margin:0 auto;padding:20px 16px 48px;display:flex;flex-direction:column;gap:18px;}
+  .top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;}
+  .brand{display:flex;flex-direction:column;gap:4px;}
+  .brand .eyebrow{font-size:11px;letter-spacing:.14em;color:var(--accent);font-weight:700;text-decoration:none;}
+  .brand .eyebrow:hover{text-decoration:underline;}
+  .brand h1{font-weight:800;font-size:clamp(22px,4vw,30px);margin:0;letter-spacing:-.01em;}
+  .brand p{margin:0;color:var(--text-dim);font-size:13px;}
+  .status-pill{display:inline-flex;align-items:center;gap:8px;padding:7px 12px;border-radius:999px;background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow);font-size:12.5px;color:var(--text-dim);max-width:100%;}
+  .status-pill span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--text-dim);flex:none;}
+  .dot.live{background:var(--ok);}
+  .dot.connecting,.dot.reconnecting,.dot.offline{background:var(--warm);}
+  .dot.error{background:var(--danger);}
+  .layout{display:grid;grid-template-columns:320px minmax(0,1fr);gap:18px;align-items:start;}
+  @media (max-width:860px){.layout{grid-template-columns:1fr;}}
+  .col{display:flex;flex-direction:column;gap:18px;min-width:0;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:16px;min-width:0;}
+  .card h2{font-weight:800;font-size:16px;margin:0 0 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .badge{font-size:11.5px;font-weight:600;color:var(--text-dim);background:var(--surface-2);padding:2px 8px;border-radius:6px;}
+  label.field{display:block;font-size:12.5px;color:var(--text-dim);margin:12px 0 5px;font-weight:600;}
+  label.field:first-of-type{margin-top:0;}
+  input[type=text],input[type=number]{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:10px;font:inherit;font-size:14px;background:var(--surface-2);color:var(--text);}
+  input[type=text]:focus,input[type=number]:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:-1px;}
+  input:disabled{opacity:.6;}
+  .bonus{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13.5px;cursor:pointer;}
+  .bonus input{width:16px;height:16px;margin:0;accent-color:var(--accent);}
+  .checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
+  .check{display:flex;align-items:center;justify-content:center;gap:7px;height:42px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);font-size:13.5px;cursor:pointer;}
+  .check input{width:15px;height:15px;margin:0;accent-color:var(--accent);}
+  .check:has(input:checked){background:var(--accent-soft);border-color:var(--accent);color:var(--accent-ink);font-weight:700;}
+  button{font:inherit;cursor:pointer;}
+  .btn{border:1px solid var(--border);background:var(--surface-2);color:var(--text);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px;}
+  .btn:hover{border-color:var(--accent);color:var(--accent);}
+  .btn:disabled{opacity:.55;cursor:default;}
+  .btn-primary{width:100%;justify-content:center;margin-top:16px;padding:11px;background:var(--accent);border-color:var(--accent);color:#fff;font-size:14px;}
+  .btn-primary:hover{color:#fff;filter:brightness(1.08);}
+  .btn-primary.stop{background:var(--danger);border-color:var(--danger);}
+  .btn-danger:hover{border-color:var(--danger);color:var(--danger);}
+  .hint{font-size:12px;color:var(--text-dim);margin-top:10px;line-height:1.6;}
+  .hint a{color:var(--accent);}
+  .error{margin-top:10px;padding:9px 11px;border-radius:10px;background:var(--warm-soft);color:var(--danger);font-size:12.5px;}
+  .table-wrap{overflow-x:auto;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th,td{text-align:left;padding:8px 9px;border-bottom:1px solid var(--border);white-space:nowrap;}
+  th{color:var(--text-dim);font-weight:600;font-size:12px;}
+  td.name{white-space:normal;word-break:break-all;min-width:140px;}
+  .num{text-align:right;font-variant-numeric:tabular-nums;}
+  .mult{color:var(--accent);font-weight:800;}
+  .empty td{text-align:center;color:var(--text-dim);padding:28px 8px;}
+  textarea{width:100%;min-height:130px;border:1px solid var(--border);border-radius:10px;padding:10px;font-family:ui-monospace,Consolas,monospace;font-size:13px;resize:vertical;background:var(--surface-2);color:var(--text);}
+  .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;align-items:center;}
+  .copied{font-size:12px;color:var(--ok);opacity:0;transition:opacity .2s;}
+  .copied.show{opacity:1;}
+  .head-actions{margin-left:auto;display:flex;gap:6px;}
+  .head-actions .btn{padding:5px 10px;font-size:12px;}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="top">
+    <div class="brand">
+      <a class="eyebrow" href="/">← 방송 일정으로</a>
+      <h1>후원 룰렛 명단</h1>
+      <p>별풍선 · 애드벌룬 · 도전미션 · 대결미션 후원자를 모아 룰렛 입력용 명단으로 만듭니다</p>
+    </div>
+    <div class="status-pill"><span class="dot" id="statusDot"></span><span id="statusText">불러오는 중…</span></div>
+  </div>
+
+  <div class="layout">
+    <section class="card">
+      <h2>설정</h2>
+      <label class="field" for="streamer">스트리머(BJ) 아이디</label>
+      <input type="text" id="streamer" value="lshooooo" autocomplete="off" spellcheck="false">
+
+      <label class="field" for="unit">기준 별풍선 개수</label>
+      <input type="number" id="unit" min="1" value="1">
+
+      <label class="bonus"><input type="checkbox" id="bonus" checked>보너스 계산식 (기본 배수 10마다 +1)</label>
+
+      <label class="field" style="margin-top:16px;">집계에 포함할 항목</label>
+      <div class="checks" id="checks"></div>
+
+      <button class="btn btn-primary" id="toggleBtn" disabled>수집 시작</button>
+      <div class="error" id="errorBox" hidden></div>
+      <div class="hint">
+        기준 개수 · 보너스 · 체크박스는 수집 중에도 바꿀 수 있고 바로 다시 계산됩니다.<br>
+        이 화면을 닫아도 서버에서 계속 수집합니다. 방송이 꺼져 있으면 1분마다 다시 확인해요.
+      </div>
+    </section>
+
+    <div class="col">
+      <section class="card">
+        <h2>실시간 후원 현황 <span class="badge" id="countBadge">0명</span>
+          <span class="head-actions">
+            <a class="btn" href="/api/roulette/log.csv">후원 기록 받기</a>
+            <button class="btn btn-danger" id="resetBtn">초기화</button>
+          </span>
+        </h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>닉네임(아이디)</th><th class="num">별풍선</th><th class="num">애드벌룬</th>
+              <th class="num">도전미션</th><th class="num">대결미션</th><th class="num">합계</th><th class="num">배수</th>
+            </tr></thead>
+            <tbody id="body"><tr class="empty"><td colspan="7">아직 후원 기록이 없습니다.</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>룰렛 명단 <span class="badge">룰렛 사이트 이름 입력창에 붙여넣기</span></h2>
+        <textarea id="list" readonly placeholder="후원이 들어오면 자동으로 채워집니다…"></textarea>
+        <div class="actions">
+          <button class="btn" id="copyBtn">명단 복사</button>
+          <a class="btn" href="https://lazygyu.github.io/roulette" target="_blank" rel="noopener noreferrer">룰렛 사이트 열기 ↗</a>
+          <span class="copied" id="copied">복사됐습니다!</span>
+        </div>
+        <div class="hint">명단을 복사한 뒤 <a href="https://lazygyu.github.io/roulette" target="_blank" rel="noopener noreferrer">lazygyu.github.io/roulette</a> 이름 입력창에 붙여넣으세요. <b>*숫자</b>만큼 당첨 확률이 올라갑니다.</div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var CATS = ['별풍선','애드벌룬','도전미션','대결미션'];
+  var $ = function(id){ return document.getElementById(id); };
+  var streamerEl=$('streamer'), unitEl=$('unit'), bonusEl=$('bonus'), checksEl=$('checks');
+  var toggleBtn=$('toggleBtn'), errorBox=$('errorBox'), listEl=$('list');
+  var current = null, busy = false, filterTimer = null, pollTimer = null;
+
+  checksEl.innerHTML = CATS.map(function(c){
+    return '<label class="check"><input type="checkbox" checked data-cat="'+c+'"><span>'+c+'</span></label>';
+  }).join('');
+
+  function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  function fmt(n){return Number(n||0).toLocaleString('ko-KR');}
+  function enabled(){
+    var r={}; checksEl.querySelectorAll('input').forEach(function(cb){ r[cb.dataset.cat]=cb.checked; }); return r;
+  }
+  function settings(){ return { unit: parseInt(unitEl.value,10)||1, bonus: bonusEl.checked, enabled: enabled() }; }
+  function showError(msg){ errorBox.textContent=msg; errorBox.hidden=!msg; }
+
+  async function api(path, body){
+    var res = await fetch(path, body===undefined ? {} : { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    var data = await res.json().catch(function(){ return {}; });
+    if (!res.ok) throw new Error(data.error || ('HTTP '+res.status));
+    return data;
+  }
+
+  var STATUS_LABEL = { idle:'수집 중지됨', connecting:'연결 중', live:'수집 중', offline:'방송 대기 중', reconnecting:'재연결 중', error:'오류' };
+
+  function render(d){
+    current = d;
+    var st = d.status || {state:'idle'};
+    $('statusDot').className = 'dot ' + (d.active ? st.state : 'idle');
+    var label = d.active ? (STATUS_LABEL[st.state]||st.state) + ' · ' + d.streamer : '수집 중지됨';
+    if (d.active && st.state==='live' && st.title) label += ' · ' + st.title;
+    $('statusText').textContent = label;
+    $('statusText').title = st.message || '';
+    showError(d.active && st.state==='error' ? st.message : '');
+
+    toggleBtn.disabled = busy;
+    toggleBtn.textContent = d.active ? '수집 중지' : '수집 시작';
+    toggleBtn.classList.toggle('stop', d.active);
+    streamerEl.disabled = d.active;
+    if (d.active || document.activeElement !== streamerEl) streamerEl.value = d.streamer;
+
+    // 사용자가 지금 만지고 있는 입력은 서버 값으로 덮어쓰지 않는다.
+    if (!filterTimer){
+      if (document.activeElement !== unitEl) unitEl.value = d.unit;
+      bonusEl.checked = d.bonus;
+      checksEl.querySelectorAll('input').forEach(function(cb){ cb.checked = !!d.enabled[cb.dataset.cat]; });
+    }
+
+    $('countBadge').textContent = d.entries.length + '명';
+    var rows = d.entries.slice().sort(function(a,b){ return b.total-a.total; });
+    $('body').innerHTML = rows.length ? rows.map(function(e){
+      var c = e.counts || {};
+      var name = e.id && e.id!==e.name ? esc(e.name)+'('+esc(e.id)+')' : esc(e.name);
+      return '<tr><td class="name">'+name+'</td>'+
+        CATS.map(function(k){ return '<td class="num">'+fmt(c[k])+'</td>'; }).join('')+
+        '<td class="num">'+fmt(e.total)+'</td>'+
+        '<td class="num mult">'+(e.multiplier>0 ? '*'+e.multiplier : '-')+'</td></tr>';
+    }).join('') : '<tr class="empty"><td colspan="7">아직 후원 기록이 없습니다.</td></tr>';
+
+    if (document.activeElement !== listEl) listEl.value = d.rouletteText;
+  }
+
+  async function poll(){
+    clearTimeout(pollTimer);
+    try { render(await api('/api/roulette')); }
+    catch(e){ $('statusText').textContent = '서버와 연결할 수 없음'; $('statusDot').className='dot error'; }
+    pollTimer = setTimeout(poll, 2000);
+  }
+
+  function scheduleFilter(){
+    clearTimeout(filterTimer);
+    filterTimer = setTimeout(async function(){
+      try { var d = await api('/api/roulette/filter', settings()); filterTimer=null; render(d); }
+      catch(e){ filterTimer=null; showError('설정 저장 실패: '+e.message); }
+    }, 300);
+  }
+  unitEl.addEventListener('input', scheduleFilter);
+  bonusEl.addEventListener('change', scheduleFilter);
+  checksEl.addEventListener('change', scheduleFilter);
+
+  toggleBtn.addEventListener('click', async function(){
+    if (!current) return;
+    busy = true; toggleBtn.disabled = true;
+    try {
+      if (current.active) {
+        if (!confirm('수집을 중지할까요?\n(지금까지 모은 명단은 그대로 남습니다)')) return;
+        render(await api('/api/roulette/stop', {}));
+      } else {
+        var body = settings(); body.streamer = streamerEl.value.trim();
+        render(await api('/api/roulette/start', body));
+      }
+    } catch(e){ showError(e.message); }
+    finally { busy = false; toggleBtn.disabled = false; }
+  });
+
+  $('resetBtn').addEventListener('click', async function(){
+    if (!confirm('정말 초기화할까요? 지금까지 모은 후원 명단이 모두 지워집니다.\n(수집은 계속되고, 이후 후원은 처음부터 다시 쌓입니다)')) return;
+    try { render(await api('/api/roulette/reset', {})); }
+    catch(e){ alert('초기화 실패: '+e.message); }
+  });
+
+  $('copyBtn').addEventListener('click', async function(){
+    try { await navigator.clipboard.writeText(listEl.value); }
+    catch(e){ listEl.select(); document.execCommand('copy'); }
+    $('copied').classList.add('show');
+    setTimeout(function(){ $('copied').classList.remove('show'); }, 1200);
+  });
+
+  poll();
+})();
+</script>
+</body>
+</html>

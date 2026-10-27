@@ -3,6 +3,7 @@ const path = require('path');
 const { runCrawl } = require('./crawler');
 const { runWorldsCrawl } = require('./worlds');
 const { getState, setState, deleteState } = require('./store');
+const roulette = require('./roulette');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -23,6 +24,7 @@ const DEFAULT_META = {
 app.use('/api/files', express.json({ limit: '9mb' }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+roulette.mount(app);
 
 app.get('/api/state', async (req, res) => {
   const [events, notices, unscheduled, memos, meta, files, worlds] = await Promise.all([
@@ -306,6 +308,7 @@ app.listen(PORT, () => {
   console.log(' http://localhost:' + PORT);
   console.log(' 이 창을 닫으면 서버가 멈춥니다. (로컬 실행 시)');
   console.log('==========================================');
+  roulette.resume().catch((e) => console.error('[roulette] 복구 실패:', e.message));
   doCrawl('시작 시 초기 크롤링');
   setInterval(() => doCrawl('정기 자동 갱신'), CRAWL_INTERVAL_MS);
 });
