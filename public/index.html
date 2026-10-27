@@ -400,7 +400,7 @@
     '</section>';
   }
 
-  // 오른쪽 위: 지금 방송 채팅방에 들어와 있는 매니저 (예: ● 방송 중 매니저 5명 · 하늘하늘_ · 데스 …)
+  // 오른쪽 위: 지금 방송 채팅방에 들어와 있는 매니저 (예: ● 방송 참여 중 매니저 5명 · 하늘하늘_ · 데스 …)
   function managersHTML(){
     var m = STATE.managers || {list:[]};
     if(!m.live){
@@ -414,7 +414,7 @@
     }).join('');
     var rest = m.list.slice(MAX);
     if(rest.length) chips += '<span class="mgr-chip more" title="'+esc(rest.map(function(u){return u.nick||u.id;}).join(', '))+'">+'+rest.length+'</span>';
-    return '<div class="mgr"><span class="mgr-dot"></span><span class="mgr-count">방송 중 매니저 <b>'+m.list.length+'</b>명</span>'+(chips?'<span class="mgr-chips">'+chips+'</span>':'')+'</div>';
+    return '<div class="mgr"><span class="mgr-dot"></span><span class="mgr-count">방송 참여 중 매니저 <b>'+m.list.length+'</b>명</span>'+(chips?'<span class="mgr-chips">'+chips+'</span>':'')+'</div>';
   }
 
   function render(){
