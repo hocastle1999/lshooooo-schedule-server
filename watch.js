@@ -282,7 +282,70 @@ async function resume() {
   startChat();
 }
 
+// ---- 하루 동안 제재당한 시청자 (제재 이력 참여자 2페이지) ----
+// 트래키파이의 그날 제재 기록을 그대로 쓴다. 제재 직전 채팅(recentMessages)이 같이 들어 있다.
+// 오늘 기록은 1분, 지난 날짜는 1시간 동안 같은 결과를 다시 쓴다.
+const dayCache = new Map(); // 날짜 → { at, items }
+async function fetchDay(date) {
+  const hit = dayCache.get(date);
+  const ttl = date === kstString().slice(0, 10) ? 60 * 1000 : 60 * 60 * 1000;
+  if (hit && Date.now() - hit.at < ttl) return hit.items;
+  const next = new Date(Date.parse(date + 'T00:00:00Z') + 86400000).toISOString().slice(0, 10);
+  const items = [];
+  let cursor = '';
+  for (let page = 1; page <= 20; page++) {
+    const json = await fetchPage(date, next, cursor);
+    for (const it of json.items || []) if (String(it.createdAt || '').startsWith(date)) items.push(it);
+    if (!json.hasMore || !json.nextCursor) break;
+    cursor = json.nextCursor;
+    await sleep(PAGE_DELAY_MS);
+  }
+  dayCache.set(date, { at: Date.now(), items });
+  if (dayCache.size > 20) dayCache.delete(dayCache.keys().next().value);
+  return items;
+}
+
+// 시청자별로 묶어서, 마지막으로 제재당한 순서대로.
+async function daySanctions(date) {
+  const present = chatStatus.state === 'live' ? presentUsers() : new Map();
+  const byId = new Map();
+  for (const it of await fetchDay(date)) {
+    const id = normId(it.userId);
+    if (!id) continue;
+    let u = byId.get(id);
+    if (!u) byId.set(id, (u = { id, nick: it.userNick || id, kicks: 0, mutes: 0, last: '', sanctions: [] }));
+    if (it.type === 'K') u.kicks++; else u.mutes++;
+    if (it.createdAt > u.last) { u.last = it.createdAt; u.nick = it.userNick || u.nick; }
+    u.sanctions.push({
+      type: it.type === 'K' ? 'K' : 'M',
+      at: it.createdAt,
+      by: it.actorUserNick || '',
+      muteSeconds: it.muteSeconds || 0,
+      messages: (it.recentMessages || []).map((m) => ({ at: m.at, text: m.text })),
+    });
+  }
+  const list = [...byId.values()].map((u) => {
+    u.sanctions.sort((a, b) => (a.at < b.at ? 1 : -1));
+    u.inRoom = present.has(u.id);
+    u.allTime90 = (byUser.get(u.id) || []).length;
+    return u;
+  });
+  list.sort((a, b) => (a.last < b.last ? 1 : -1));
+  const total = list.reduce((s, u) => s + u.kicks + u.mutes, 0);
+  return { date, today: kstString().slice(0, 10), total, people: list.length, list };
+}
+
 function mount(app) {
+  app.get('/api/sanctions/day', async (req, res) => {
+    await ensureLoaded();
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : kstString().slice(0, 10);
+    try {
+      res.json(await daySanctions(date));
+    } catch (e) {
+      res.status(502).json({ error: '트래키파이에서 제재 기록을 받지 못했습니다: ' + e.message });
+    }
+  });
+
   app.get('/api/watch', async (req, res) => {
     await ensureLoaded();
     const days = Math.min(KEEP_DAYS, Math.max(1, parseInt(req.query.days, 10) || 30));
