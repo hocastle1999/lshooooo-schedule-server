@@ -114,7 +114,49 @@ async function syncSanctions() {
 
 // ---- 참여자 목록 ----
 
+// 혹시 놓친 권한 변경이 있어도 맞도록, 방송 중에는 5분마다 잠깐 새로 접속해서
+// 처음 받는 전체 참여자 목록(여기엔 매니저 표시가 정확히 들어 있다)으로 매니저 여부를 다시 맞춘다.
+const RESYNC_MS = 5 * 60 * 1000;
+let resyncing = false;
+function resyncManagers() {
+  if (resyncing || chatStatus.state !== 'live') return;
+  resyncing = true;
+  const managerIds = new Set();
+  let gotList = false;
+  const tmp = new SoopChat(STREAMER, { offlineRetryMs: 24 * 3600 * 1000 }).start();
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    tmp.removeAllListeners();
+    tmp.stop();
+    resyncing = false;
+    if (!gotList || chatStatus.state !== 'live') return;
+    let changed = 0;
+    for (const v of viewers.values()) {
+      const m = managerIds.has(v.id);
+      if (v.manager !== m) { v.manager = m; changed++; }
+    }
+    if (changed) console.log(`[watch] 매니저 표시 ${changed}명 다시 맞춤 (지금 매니저 ${managerIds.size}명)`);
+  };
+  tmp.on('packet', ({ code, parts }) => {
+    if (code !== 4 || parts.length <= 9) return;
+    gotList = true;
+    for (let i = 1; i + 2 < parts.length; i += 3) if (isManager(parts[i + 2])) managerIds.add(normId(parts[i]));
+  });
+  tmp.on('status', (st) => { if (st.state !== 'live' && st.state !== 'connecting') finish(); });
+  setTimeout(finish, 20000); // 목록은 접속 후 몇 초 안에 다 온다
+}
+
 function onPacket({ code, parts }) {
+  if (code === 12) {
+    // 권한 변경: flag | 아이디 | 닉네임 | 0 | 0 | flag (바뀌기 전·후 flag 두 개)
+    // 방송 도중 들어온 매니저는 입장 알림에 매니저 표시가 없고, 이 알림으로 나중에 붙는다.
+    // 두 flag 중 어느 쪽이 새 값인지 확실하지 않아서 매니저 표시는 붙이기만 하고, 떼는 건 5분마다 다시 맞출 때 한다.
+    const v = viewers.get(parts[1]);
+    if (v && (isManager(parts[0]) || isManager(parts[5]))) v.manager = true;
+    return;
+  }
   if (code !== 4) return;
   if (parts.length > 9) {
     // 입장 직후 받는 참여자 목록: 1 | 아이디 | 닉네임 | flag | 아이디 | 닉네임 | flag ...
@@ -144,6 +186,7 @@ function startChat() {
   });
   chat.on('packet', onPacket);
   keepAwake.acquire('watch');
+  setInterval(resyncManagers, RESYNC_MS);
   setInterval(syncSanctions, SYNC_EVERY_MS);
   syncSanctions();
 }
@@ -245,4 +288,4 @@ function mount(app) {
   });
 }
 
-module.exports = { mount, resume, managers, onPacket };
+module.exports = { mount, resume, managers, onPacket, resyncManagers };
