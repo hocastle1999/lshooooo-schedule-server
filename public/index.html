@@ -130,6 +130,7 @@
   .memo-tab.drop-after{box-shadow:3px 0 0 var(--accent);}
   .memo-move{padding:8px 10px;}
   .memo-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;}
+  .memo-foot .btn{white-space:nowrap;}
   .memo-saved{font-size:11.5px;color:var(--text-dim);}
   .file-list{display:flex;flex-direction:column;gap:8px;margin-bottom:10px;}
   .file-item{border:1px solid var(--border);border-radius:12px;padding:9px 12px;background:var(--surface-2);display:flex;align-items:center;justify-content:space-between;gap:10px;}
@@ -380,8 +381,8 @@
           '<span style="display:flex;gap:6px;">'+
             '<button type="button" class="btn memo-move" data-action="memo-move" data-id="'+esc(page.id)+'" data-dir="-1" title="왼쪽으로 옮기기" aria-label="왼쪽으로 옮기기">◀</button>'+
             '<button type="button" class="btn memo-move" data-action="memo-move" data-id="'+esc(page.id)+'" data-dir="1" title="오른쪽으로 옮기기" aria-label="오른쪽으로 옮기기">▶</button>'+
-            '<button type="button" class="btn" data-action="memo-rename" data-id="'+esc(page.id)+'">이름 바꾸기</button>'+
-            '<button type="button" class="btn" data-action="memo-delete" data-id="'+esc(page.id)+'">페이지 삭제</button>'+
+            '<button type="button" class="btn" data-action="memo-rename" data-id="'+esc(page.id)+'" title="페이지 이름 바꾸기">이름 변경</button>'+
+            '<button type="button" class="btn" data-action="memo-delete" data-id="'+esc(page.id)+'" title="페이지 삭제">삭제</button>'+
             '<button type="submit" class="btn primary">저장</button>'+
           '</span></div>'+
       '</form>';
