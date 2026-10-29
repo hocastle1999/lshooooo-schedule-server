@@ -336,6 +336,25 @@ async function daySanctions(date) {
 }
 
 function mount(app) {
+  // 한 사람의 최근 90일 제재 이력 (🔍 버튼). 제재 직전 채팅은 화면에서 그날 기록(/api/sanctions/day)으로 따로 본다.
+  app.get('/api/sanctions/user', async (req, res) => {
+    await ensureLoaded();
+    const id = normId(String(req.query.id || '').trim());
+    if (!id) return res.status(400).json({ error: '아이디가 필요합니다' });
+    const items = byUser.get(id) || [];
+    const kicks = items.filter((it) => it[2] === 'K').length;
+    res.json({
+      id,
+      nick: items.length ? items[0][1] : '',
+      keepDays: KEEP_DAYS,
+      syncedAt: sanctions.syncedAt,
+      kicks,
+      mutes: items.length - kicks,
+      inRoom: chatStatus.state === 'live' && presentUsers().has(id),
+      items: items.map((it) => ({ type: it[2], at: it[3], by: it[4] })),
+    });
+  });
+
   app.get('/api/sanctions/day', async (req, res) => {
     await ensureLoaded();
     const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : kstString().slice(0, 10);
