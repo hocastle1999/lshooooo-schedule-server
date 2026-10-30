@@ -336,7 +336,60 @@ async function daySanctions(date) {
 }
 
 function mount(app) {
-  // 한 사람의 최근 90일 제재 이력 (🔍 버튼). 제재 직전 채팅은 화면에서 그날 기록(/api/sanctions/day)으로 따로 본다.
+  // 🔍 버튼: 트래키파이 '유저 제재 이력 부검'과 같은 데이터. 다른 방송에서 받은 제재까지 전부, 제재 직전 채팅 포함.
+  // page 는 1부터. 첫 페이지일 때만 요약(총 제재·스트리머별 횟수)을 같이 준다. 같은 요청은 2분 동안 다시 쓴다.
+  const lookupCache = new Map();
+  const TRACKIFY = 'https://www.trackify.kr/api/v1/p/soop';
+  async function trackifyGet(path) {
+    const hit = lookupCache.get(path);
+    if (hit && Date.now() - hit.at < 2 * 60 * 1000) return hit.json;
+    const res = await fetch(TRACKIFY + path, { headers: { 'User-Agent': 'Mozilla/5.0 lshooooo-schedule' }, signal: AbortSignal.timeout(20000) });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const json = await res.json();
+    lookupCache.set(path, { at: Date.now(), json });
+    if (lookupCache.size > 200) lookupCache.delete(lookupCache.keys().next().value);
+    return json;
+  }
+  app.get('/api/sanctions/lookup', async (req, res) => {
+    const id = normId(String(req.query.id || '').trim());
+    if (!/^[A-Za-z0-9_]{1,40}$/.test(id)) return res.status(400).json({ error: '아이디를 확인해주세요' });
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    try {
+      const [summary, list] = await Promise.all([
+        page === 1 ? trackifyGet(`/sanctions/user/${id}/summary`) : null,
+        trackifyGet(`/sanctions?userId=${id}&page=${page}&size=20`),
+      ]);
+      res.json({
+        id,
+        page,
+        total: list.total || 0,
+        more: Boolean(list.more),
+        inRoom: chatStatus.state === 'live' && presentUsers().has(id),
+        summary: summary && {
+          nick: summary.userNick || '',
+          total: summary.total || 0,
+          kicks: summary.kick || 0,
+          mutes: summary.mute || 0,
+          streamerCount: summary.streamerCount || 0,
+          topStreamers: (summary.topStreamers || []).map((s) => ({ id: s.broadUserId, nick: s.nick, count: s.cnt })),
+        },
+        items: (list.data || []).map((it) => ({
+          at: it.createdAt,
+          type: it.type === 'K' ? 'K' : 'M',
+          streamerId: it.broadUserId,
+          streamer: it.broadUserNick || it.broadUserId,
+          by: it.actorUserNick || '',
+          muteSeconds: it.muteSeconds || 0,
+          nick: it.userNick || '',
+          messages: (it.recentMessages || []).map((m) => ({ at: m.at, text: m.text })),
+        })),
+      });
+    } catch (e) {
+      res.status(502).json({ error: '트래키파이에서 제재 이력을 받지 못했습니다: ' + e.message });
+    }
+  });
+
+  // 이 방송에서 받은 최근 90일 제재만 (저장해 둔 기록에서).
   app.get('/api/sanctions/user', async (req, res) => {
     await ensureLoaded();
     const id = normId(String(req.query.id || '').trim());

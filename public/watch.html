@@ -92,6 +92,20 @@
   .hx-row .by{color:var(--text-dim);}
   .hx-row .btn{margin-left:auto;padding:3px 9px;font-size:11.5px;}
   .hx-chat{width:100%;margin:4px 0 2px;padding:8px 10px;background:var(--surface-2);border-radius:8px;}
+  .hx-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0 4px;}
+  .hx-card{border:1px solid var(--border);border-radius:12px;background:var(--surface-2);padding:10px 12px;}
+  .hx-card .l{font-size:11.5px;color:var(--text-dim);}
+  .hx-card .v{font-size:22px;font-weight:800;margin-top:2px;}
+  .hx-card .v.k{color:var(--danger);}
+  .hx-card .s{font-size:11.5px;color:var(--text-dim);margin-top:1px;}
+  .hx-sub{font-size:12.5px;font-weight:800;color:var(--text-dim);margin:14px 0 6px;}
+  .hx-streamers{display:flex;flex-wrap:wrap;gap:6px;}
+  .hx-st{font-size:12.5px;font-weight:700;border:1px solid var(--border);background:var(--surface-2);border-radius:999px;padding:4px 10px;}
+  .hx-st b{color:var(--text-dim);font-weight:600;margin-left:4px;}
+  .hx-st.me{border-color:var(--accent);color:var(--accent);}
+  .hx-row .st{font-weight:700;}
+  .hx-row .st.me{color:var(--accent);}
+  .hx-more{width:100%;margin-top:10px;}
   .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--text);color:var(--bg);font-size:13px;font-weight:600;padding:9px 16px;border-radius:999px;box-shadow:var(--shadow);z-index:30;pointer-events:none;}
   tr.detail td{background:var(--surface-2);white-space:normal;padding:10px 12px;}
   .hist{display:flex;flex-wrap:wrap;gap:6px;}
@@ -178,7 +192,7 @@
       </table>
     </div>
     <div class="hint">
-      닉네임이나 아이디를 누르면 복사되고, 🔍를 누르면 최근 90일 제재 이력이, 줄의 다른 곳을 누르면 제재 내역이 펼쳐집니다. <span class="new">새로 입장</span>은 방송 중간에 들어온 사람입니다.<br>
+      닉네임이나 아이디를 누르면 복사되고, 🔍를 누르면 다른 방송까지 포함한 전체 제재 이력이, 줄의 다른 곳을 누르면 제재 내역이 펼쳐집니다. <span class="new">새로 입장</span>은 방송 중간에 들어온 사람입니다.<br>
       제재 기록은 <a href="https://www.trackify.kr/soop/lshooooo?tab=sanctions" target="_blank" rel="noopener noreferrer">트래키파이</a>에 공개된 이 방송의 기록(최근 90일)이고, 15분마다 새로 받아옵니다. 방송이 켜지면 자동으로 확인을 시작해요.
       참여자 목록에는 로그인한 시청자만 나옵니다.
     </div>
@@ -205,7 +219,7 @@
       <div class="sx-list" id="dayList"><div class="hint">불러오는 중…</div></div>
       <div class="hint">
         <a href="https://www.trackify.kr/soop/lshooooo?tab=sanctions" target="_blank" rel="noopener noreferrer">트래키파이</a>에 올라온 그날의 강퇴·채금 기록과 제재 직전 채팅입니다. 오늘 기록은 1분마다 새로 받아와요.
-        마지막으로 제재당한 순서대로 보이고, <span class="tag in">참여 중</span>은 지금 방송에 들어와 있는 사람입니다. 닉네임이나 아이디를 누르면 복사되고, 🔍를 누르면 최근 90일 제재 이력이 보여요.
+        마지막으로 제재당한 순서대로 보이고, <span class="tag in">참여 중</span>은 지금 방송에 들어와 있는 사람입니다. 닉네임이나 아이디를 누르면 복사되고, 🔍를 누르면 다른 방송까지 포함한 전체 제재 이력이 보여요.
       </div>
     </section>
   </div>
@@ -423,6 +437,7 @@
     return '<button type="button" class="mag" data-hist="' + esc(id) + '" data-nick="' + esc(nick) + '" title="제재 이력 보기" aria-label="제재 이력 보기">🔍</button>';
   }
   function closeHist(){ var o = document.querySelector('.hx-overlay'); if (o) o.remove(); }
+  // 다른 방송에서 받은 제재까지 전부 보여준다 (트래키파이 '유저 제재 이력 부검'과 같은 데이터).
   async function openHist(id, nick){
     closeHist();
     var wrap = document.createElement('div');
@@ -431,50 +446,73 @@
       '<button type="button" class="hx-close" data-hx-close aria-label="닫기">✕</button></div><div class="hx-body"><div class="hint">불러오는 중…</div></div></div>';
     document.body.appendChild(wrap);
     var bodyEl = wrap.querySelector('.hx-body');
-    try {
-      var res = await fetch('/api/sanctions/user?id=' + encodeURIComponent(id));
-      var d = await res.json();
-      if (!res.ok) throw new Error(d.error || ('HTTP ' + res.status));
-      var head = wrap.querySelector('.hx-head');
-      head.insertAdjacentHTML('beforeend', '<div style="flex-basis:100%;display:flex;gap:6px;flex-wrap:wrap;">' +
-        '<span class="tag">최근 ' + d.keepDays + '일 ' + d.items.length + '건</span>' +
-        (d.kicks ? '<span class="tag k">강퇴 ' + d.kicks + '</span>' : '') + (d.mutes ? '<span class="tag m">채금 ' + d.mutes + '</span>' : '') +
-        (d.inRoom ? '<span class="tag in">참여 중</span>' : '') + '</div>');
-      if (!d.items.length) { bodyEl.innerHTML = '<div class="hint">최근 ' + d.keepDays + '일 동안 이 방송에서 받은 제재가 없어요.</div>'; return; }
-      var lastDate = '';
-      bodyEl.innerHTML = d.items.map(function(x){
+    var loaded = 0, page = 0, lastDate = '';
+
+    function rowsHTML(items){
+      return items.map(function(x){
         var date = x.at.slice(0, 10), out = '';
         if (date !== lastDate) {
           lastDate = date;
           var w = ['일','월','화','수','목','금','토'][new Date(date + 'T00:00:00').getDay()];
-          out += '<div class="hx-date">' + Number(date.slice(5,7)) + '월 ' + Number(date.slice(8,10)) + '일 (' + w + ')</div>';
+          out += '<div class="hx-date">' + date.slice(0,4) + '년 ' + Number(date.slice(5,7)) + '월 ' + Number(date.slice(8,10)) + '일 (' + w + ')</div>';
         }
-        return out + '<div class="hx-row"><span>' + x.at.slice(11,16) + '</span>' +
-          (x.type === 'K' ? '<span class="k">강퇴</span>' : '<span class="m">채금</span>') +
-          (x.by ? '<span class="by">· ' + esc(x.by) + '</span>' : '') +
-          '<button type="button" class="btn" data-hx-chat="' + esc(x.at) + '" data-hx-type="' + x.type + '">채팅 보기</button></div>';
-      }).join('') + '<div class="hint">' + (d.syncedAt ? '제재 기록은 15분마다 새로 받아와요. ' : '') + '채팅 보기를 누르면 그 제재 직전 채팅이 나와요.</div>';
-    } catch(e){ bodyEl.innerHTML = '<div class="error">제재 이력을 불러오지 못했어요: ' + esc(e.message) + '</div>'; }
-
-    // 채팅 보기: 그날 기록에서 같은 시각의 제재를 찾아 직전 채팅을 펼친다
-    bodyEl.addEventListener('click', async function(e){
-      var b = e.target.closest('[data-hx-chat]'); if (!b) return;
-      var row = b.closest('.hx-row'), open = row.querySelector('.hx-chat');
-      if (open) { open.remove(); b.textContent = '채팅 보기'; return; }
-      var at = b.getAttribute('data-hx-chat'), type = b.getAttribute('data-hx-type');
-      b.disabled = true; b.textContent = '불러오는 중…';
-      var html;
-      try {
-        var r = await fetch('/api/sanctions/day?date=' + encodeURIComponent(at.slice(0,10)));
-        var dd = await r.json();
-        if (!r.ok) throw new Error(dd.error || ('HTTP ' + r.status));
-        var u = dd.list.find(function(x){ return x.id === id; });
-        var hit = u && u.sanctions.find(function(x){ return x.at === at && x.type === type; });
-        html = hit && hit.messages.length ? hit.messages.map(function(m){ return '<div><span class="t">' + esc(m.at.slice(11,19)) + '</span>' + esc(m.text) + '</div>'; }).join('')
+        var chats = x.messages.length ? x.messages.map(function(m){ return '<div><span class="t">' + esc(m.at.slice(11,19)) + '</span>' + esc(m.text) + '</div>'; }).join('')
           : '<div class="none">제재 직전 채팅 기록이 없어요.</div>';
-      } catch(err){ html = '<div class="none">채팅을 불러오지 못했어요: ' + esc(err.message) + '</div>'; }
-      row.insertAdjacentHTML('beforeend', '<div class="hx-chat chat">' + html + '</div>');
-      b.disabled = false; b.textContent = '채팅 닫기';
+        return out + '<div class="hx-row"><span>' + x.at.slice(11,16) + '</span>' +
+          '<span class="st' + (x.streamerId === 'lshooooo' ? ' me' : '') + '">' + esc(x.streamer) + '</span>' +
+          (x.type === 'K' ? '<span class="k">강퇴</span>' : '<span class="m">채금' + (x.muteSeconds ? ' ' + x.muteSeconds + '초' : '') + '</span>') +
+          (x.by ? '<span class="by">· ' + esc(x.by) + '</span>' : '') +
+          '<button type="button" class="btn" data-hx-toggle>채팅 보기</button>' +
+          '<div class="hx-chat chat" hidden>' + chats + '</div></div>';
+      }).join('');
+    }
+
+    async function loadPage(){
+      page++;
+      var res = await fetch('/api/sanctions/lookup?id=' + encodeURIComponent(id) + '&page=' + page);
+      var d = await res.json();
+      if (!res.ok) throw new Error(d.error || ('HTTP ' + res.status));
+      loaded += d.items.length;
+      return d;
+    }
+    function moreBtn(d){
+      return d.more ? '<button type="button" class="btn hx-more" data-hx-more>더 보기 (' + loaded + ' / ' + d.total + ')</button>' : '';
+    }
+
+    try {
+      var d = await loadPage(), sm = d.summary || {};
+      if (sm.nick && !nick) wrap.querySelector('.hx-head h3').firstChild.textContent = sm.nick;
+      if (d.inRoom) wrap.querySelector('.hx-head h3').insertAdjacentHTML('beforeend', ' <span class="tag in">참여 중</span>');
+      if (!sm.total) { bodyEl.innerHTML = '<div class="hint">트래키파이에 기록된 제재가 없어요.</div>'; return; }
+      bodyEl.innerHTML =
+        '<div class="hx-cards">' +
+          '<div class="hx-card"><div class="l">총 제재</div><div class="v">' + fmt(sm.total) + '</div></div>' +
+          '<div class="hx-card"><div class="l">강퇴</div><div class="v k">' + fmt(sm.kicks) + '</div><div class="s">채금 ' + fmt(sm.mutes) + '</div></div>' +
+          '<div class="hx-card"><div class="l">제재한 스트리머</div><div class="v">' + fmt(sm.streamerCount) + '</div></div>' +
+        '</div>' +
+        (sm.topStreamers.length ? '<div class="hx-sub">자주 제재한 스트리머</div><div class="hx-streamers">' + sm.topStreamers.map(function(t){
+          return '<span class="hx-st' + (t.id === 'lshooooo' ? ' me' : '') + '">' + esc(t.nick) + '<b>' + t.count + '건</b></span>';
+        }).join('') + '</div>' : '') +
+        '<div class="hx-sub">제재 기록</div><div class="hx-list">' + rowsHTML(d.items) + '</div>' + moreBtn(d) +
+        '<div class="hint">트래키파이의 유저 제재 이력 부검과 같은 기록이에요. 이 방송(이상호) 기록은 초록색으로 표시돼요.</div>';
+    } catch(e){ bodyEl.innerHTML = '<div class="error">제재 이력을 불러오지 못했어요: ' + esc(e.message) + '</div>'; return; }
+
+    bodyEl.addEventListener('click', async function(e){
+      var t = e.target.closest('[data-hx-toggle]');
+      if (t) {
+        var c = t.parentNode.querySelector('.hx-chat');
+        c.hidden = !c.hidden; t.textContent = c.hidden ? '채팅 보기' : '채팅 닫기';
+        return;
+      }
+      var m = e.target.closest('[data-hx-more]');
+      if (!m) return;
+      m.disabled = true; m.textContent = '불러오는 중…';
+      try {
+        var nd = await loadPage();
+        bodyEl.querySelector('.hx-list').insertAdjacentHTML('beforeend', rowsHTML(nd.items));
+        m.insertAdjacentHTML('afterend', moreBtn(nd));
+        m.remove();
+      } catch(err){ m.disabled = false; m.textContent = '다시 시도 (' + err.message + ')'; page--; }
     });
   }
   document.addEventListener('click', function(e){
