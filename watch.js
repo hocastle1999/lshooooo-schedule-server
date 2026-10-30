@@ -327,7 +327,19 @@ async function daySanctions(date) {
   const list = [...byId.values()].map((u) => {
     u.sanctions.sort((a, b) => (a.at < b.at ? 1 : -1));
     u.inRoom = present.has(u.id);
-    u.allTime90 = (byUser.get(u.id) || []).length;
+    // 이 방송 최근 90일: 저장해 둔 기록(15분마다 갱신)에 아직 안 들어온 그날 제재까지 합쳐서 센다
+    const seen = new Set();
+    let k90 = 0, m90 = 0;
+    const count = (type, at) => {
+      if (seen.has(type + '|' + at)) return;
+      seen.add(type + '|' + at);
+      if (type === 'K') k90++; else m90++;
+    };
+    for (const it of byUser.get(u.id) || []) count(it[2], it[3]);
+    for (const x of u.sanctions) count(x.type, x.at);
+    u.kicks90 = k90;
+    u.mutes90 = m90;
+    u.total90 = k90 + m90;
     return u;
   });
   list.sort((a, b) => (a.last < b.last ? 1 : -1));
