@@ -187,7 +187,7 @@
       <table>
         <thead><tr>
           <th>닉네임(아이디)</th><th class="num" id="periodHead">최근 30일</th><th class="num">강퇴</th><th class="num">채금</th>
-          <th class="num">90일 전체</th><th>마지막 제재</th>
+          <th class="num" title="이 방송(이상호)에서 최근 90일 동안 받은 제재">90일 (이 방송)</th><th>마지막 제재</th>
         </tr></thead>
         <tbody id="body"><tr class="empty"><td colspan="6">불러오는 중…</td></tr></tbody>
       </table>
@@ -408,9 +408,10 @@
       var name = '<button type="button" class="copy sx-name" data-copy="' + esc(u.nick) + '" title="닉네임 복사">' + esc(u.nick) + '</button>' +
         (u.id !== u.nick ? '<span class="uid">(<button type="button" class="copy" data-copy="' + esc(u.id) + '" title="아이디 복사">' + esc(u.id) + '</button>)</span>' : '') +
         magBtn(u.id, u.nick);
-      var tags = (u.kicks ? '<span class="tag k">강퇴 ' + u.kicks + '</span>' : '') + (u.mutes ? '<span class="tag m">채금 ' + u.mutes + '</span>' : '') +
+      var when = d.date === d.today ? '오늘' : '그날';
+      var tags = (u.kicks ? '<span class="tag k" title="' + when + ' 이 방송에서 받은 강퇴">' + when + ' 강퇴 ' + u.kicks + '</span>' : '') + (u.mutes ? '<span class="tag m" title="' + when + ' 이 방송에서 받은 채금">' + when + ' 채금 ' + u.mutes + '</span>' : '') +
         (u.inRoom ? '<span class="tag in">참여 중</span>' : '') +
-        (u.allTime90 > u.kicks + u.mutes ? '<span class="tag" title="최근 90일 이 방송에서 받은 제재">90일 ' + u.allTime90 + '건</span>' : '');
+        '<span class="tag" title="이 방송(이상호)에서 최근 90일 동안 받은 제재. 다른 방송까지 포함한 전체는 🔍">이 방송 90일 ' + u.allTime90 + '건</span>';
       var items = u.sanctions.map(function(x){
         var what = x.type === 'K' ? '<span class="k">강퇴</span>' : '<span class="m">채금' + (x.muteSeconds ? ' ' + x.muteSeconds + '초' : '') + '</span>';
         var chats = x.messages.length ? x.messages.map(function(m){
@@ -484,11 +485,13 @@
       var d = await loadPage(), sm = d.summary || {};
       if (sm.nick && !nick) wrap.querySelector('.hx-head h3').firstChild.textContent = sm.nick;
       if (d.inRoom) wrap.querySelector('.hx-head h3').insertAdjacentHTML('beforeend', ' <span class="tag in">참여 중</span>');
+      // 자주 제재한 스트리머 목록(상위 몇 명)에 이 방송이 있을 때만 '이 방송 N건'을 붙인다
+      var mine = ((sm.topStreamers || []).find(function(t){ return t.id === 'lshooooo'; }) || {}).count || 0;
       if (!sm.total) { bodyEl.innerHTML = '<div class="hint">트래키파이에 기록된 제재가 없어요.</div>'; return; }
       bodyEl.innerHTML =
         '<div class="hx-cards">' +
-          '<div class="hx-card"><div class="l">총 제재</div><div class="v">' + fmt(sm.total) + '</div></div>' +
-          '<div class="hx-card"><div class="l">강퇴</div><div class="v k">' + fmt(sm.kicks) + '</div><div class="s">채금 ' + fmt(sm.mutes) + '</div></div>' +
+          '<div class="hx-card"><div class="l">총 제재 (모든 방송)</div><div class="v">' + fmt(sm.total) + '</div>' + (mine ? '<div class="s">이 방송 ' + fmt(mine) + '건</div>' : '') + '</div>' +
+          '<div class="hx-card"><div class="l">강퇴 (모든 방송)</div><div class="v k">' + fmt(sm.kicks) + '</div><div class="s">채금 ' + fmt(sm.mutes) + '</div></div>' +
           '<div class="hx-card"><div class="l">제재한 스트리머</div><div class="v">' + fmt(sm.streamerCount) + '</div></div>' +
         '</div>' +
         (sm.topStreamers.length ? '<div class="hx-sub">자주 제재한 스트리머</div><div class="hx-streamers">' + sm.topStreamers.map(function(t){
