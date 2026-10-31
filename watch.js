@@ -55,15 +55,48 @@ function rebuildIndex() {
   }
 }
 
-async function fetchPage(from, to, cursor) {
+// ---- 트래키파이 요청 줄 세우기 ----
+// 짧은 시간에 여러 번 요청하면 "요청이 너무 많습니다(429)"로 막혀서, 모든 요청을 한 줄로 세워
+// 1.1초 간격으로 하나씩 보낸다. 사람이 직접 누른 🔍 조회는 줄 맨 앞에 끼워 넣는다.
+const TK_GAP_MS = 1100;
+const tkQueue = [];
+let tkBusy = false;
+function tkFetch(url, { urgent = false } = {}) {
+  return new Promise((resolve, reject) => {
+    const job = { url, resolve, reject, tries: 0 };
+    if (urgent) tkQueue.unshift(job); else tkQueue.push(job);
+    tkPump();
+  });
+}
+async function tkPump() {
+  if (tkBusy) return;
+  const job = tkQueue.shift();
+  if (!job) return;
+  tkBusy = true;
+  let wait = TK_GAP_MS;
+  try {
+    const res = await fetch(job.url, { headers: { 'User-Agent': 'Mozilla/5.0 lshooooo-schedule' }, signal: AbortSignal.timeout(20000) });
+    if (res.status === 429 && job.tries++ < 4) {
+      tkQueue.unshift(job); // 잠깐 쉬었다가 같은 요청을 다시
+      wait = 3000;
+    } else if (!res.ok) {
+      job.reject(new Error('HTTP ' + res.status));
+    } else {
+      job.resolve(await res.json());
+    }
+  } catch (e) {
+    job.reject(e);
+  }
+  setTimeout(() => { tkBusy = false; tkPump(); }, wait);
+}
+
+async function fetchPage(from, to, cursor, urgent = false) {
   const url =
     `https://www.trackify.kr/api/v1/p/soop/streamer/${STREAMER}/sanctions?from=${from}&to=${to}&size=100` +
     (cursor ? `&cursor=${encodeURIComponent(cursor)}` : '');
   for (let attempt = 1; ; attempt++) {
     try {
-      const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 lshooooo-schedule' }, signal: AbortSignal.timeout(20000) });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      return await res.json();
+      return await tkFetch(url, { urgent });
     } catch (e) {
       if (attempt >= 3) throw e;
       await sleep(3000 * attempt);
@@ -294,7 +327,7 @@ async function fetchDay(date) {
   const items = [];
   let cursor = '';
   for (let page = 1; page <= 20; page++) {
-    const json = await fetchPage(date, next, cursor);
+    const json = await fetchPage(date, next, cursor, true); // 화면에서 기다리는 요청이라 줄 앞으로
     for (const it of json.items || []) if (String(it.createdAt || '').startsWith(date)) items.push(it);
     if (!json.hasMore || !json.nextCursor) break;
     cursor = json.nextCursor;
@@ -306,7 +339,55 @@ async function fetchDay(date) {
 }
 
 // 시청자별로 묶어서, 마지막으로 제재당한 순서대로.
+// ---- 사람별 이상호 방송 제재 횟수 (전체 기간, 🔍 창과 같은 기준) ----
+// 오늘 제재당한 시청자 카드의 라벨용. 트래키파이에 사람마다 한 번씩 물어봐야 해서 줄 맨 뒤에서 천천히 채우고,
+// 받은 결과는 저장해 둔다. 그 사람이 받은 마지막 제재보다 먼저 센 결과면 다시 센다.
+const CH_KEY = 'channelCounts';
+let chCounts = null; // id → { k, m, at(KST 문자열: 센 시각) }
+const chPending = new Set();
+let chSaveTimer = null;
+async function loadChCounts() {
+  if (!chCounts) chCounts = (await getState(CH_KEY, null)) || {};
+  return chCounts;
+}
+function saveChCountsSoon() {
+  if (chSaveTimer) return;
+  chSaveTimer = setTimeout(async () => {
+    chSaveTimer = null;
+    const ids = Object.keys(chCounts);
+    if (ids.length > 5000) { // 오래 안 본 사람부터 정리
+      ids.sort((a, b) => (chCounts[a].at < chCounts[b].at ? -1 : 1)).slice(0, ids.length - 5000).forEach((id) => delete chCounts[id]);
+    }
+    try { await setState(CH_KEY, chCounts); } catch (e) { console.error('[watch] 제재 횟수 저장 실패:', e.message); }
+  }, 10000);
+}
+async function countChannel(id) {
+  let k = 0, m = 0;
+  const at = kstString();
+  for (let page = 1; page <= 20; page++) {
+    const json = await tkFetch(`https://www.trackify.kr/api/v1/p/soop/sanctions?userId=${encodeURIComponent(id)}&broadUserId=${STREAMER}&page=${page}&size=50`);
+    for (const it of json.data || []) {
+      if (it.broadUserId && it.broadUserId !== STREAMER) continue;
+      if (it.type === 'K') k++; else m++;
+    }
+    if (!json.more) break;
+  }
+  chCounts[id] = { k, m, at };
+  saveChCountsSoon();
+}
+// 아직 안 셌거나, 센 뒤에 새로 제재를 받은 사람만 줄에 세운다
+function wantChCount(id, lastSanctionAt) {
+  const c = chCounts[id];
+  if (c && c.at >= lastSanctionAt) return c;
+  if (!chPending.has(id)) {
+    chPending.add(id);
+    countChannel(id).catch((e) => console.error('[watch] 제재 횟수 세기 실패', id, e.message)).finally(() => chPending.delete(id));
+  }
+  return c && { ...c, stale: true };
+}
+
 async function daySanctions(date) {
+  await loadChCounts();
   const present = chatStatus.state === 'live' ? presentUsers() : new Map();
   const byId = new Map();
   for (const it of await fetchDay(date)) {
@@ -340,6 +421,8 @@ async function daySanctions(date) {
     u.kicks90 = k90;
     u.mutes90 = m90;
     u.total90 = k90 + m90;
+    const ch = wantChCount(u.id, u.last);
+    u.channel = ch ? { kicks: ch.k, mutes: ch.m, total: ch.k + ch.m, updating: Boolean(ch.stale) } : null;
     return u;
   });
   list.sort((a, b) => (a.last < b.last ? 1 : -1));
@@ -355,9 +438,7 @@ function mount(app) {
   async function trackifyGet(path) {
     const hit = lookupCache.get(path);
     if (hit && Date.now() - hit.at < 2 * 60 * 1000) return hit.json;
-    const res = await fetch(TRACKIFY + path, { headers: { 'User-Agent': 'Mozilla/5.0 lshooooo-schedule' }, signal: AbortSignal.timeout(20000) });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const json = await res.json();
+    const json = await tkFetch(TRACKIFY + path, { urgent: true });
     lookupCache.set(path, { at: Date.now(), json });
     if (lookupCache.size > 200) lookupCache.delete(lookupCache.keys().next().value);
     return json;

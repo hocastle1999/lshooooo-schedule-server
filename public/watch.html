@@ -408,12 +408,15 @@
       var name = '<button type="button" class="copy sx-name" data-copy="' + esc(u.nick) + '" title="닉네임 복사">' + esc(u.nick) + '</button>' +
         (u.id !== u.nick ? '<span class="uid">(<button type="button" class="copy" data-copy="' + esc(u.id) + '" title="아이디 복사">' + esc(u.id) + '</button>)</span>' : '') +
         magBtn(u.id, u.nick);
-      // 라벨은 이상호 방송에서 최근 90일 동안 받은 제재 (그날 제재는 아래에 하나씩 나온다. 다른 방송까지 포함한 전체는 🔍)
-      var tip = '이상호 방송에서 최근 90일 동안 받은 ';
-      var tags = '<span class="tag" title="' + tip + '제재">이상호 방송 90일 ' + u.total90 + '건</span>' +
-        (u.kicks90 ? '<span class="tag k" title="' + tip + '강퇴">강퇴 ' + u.kicks90 + '</span>' : '') +
-        (u.mutes90 ? '<span class="tag m" title="' + tip + '채금">채금 ' + u.mutes90 + '</span>' : '') +
-        (u.inRoom ? '<span class="tag in">참여 중</span>' : '');
+      // 라벨은 🔍 창과 같은 기준: 이상호 방송에서 지금까지 받은 제재 전체 (트래키파이 기록).
+      // 서버가 사람마다 차례로 세는 중이면 잠깐 '세는 중'으로 나온다.
+      var ch = u.channel, tip = '이상호 방송에서 지금까지 받은 ';
+      var tags = ch
+        ? '<span class="tag" title="' + tip + '제재 (🔍 창과 같은 기준)">이상호 방송 ' + ch.total + '건' + (ch.updating ? ' …' : '') + '</span>' +
+          (ch.kicks ? '<span class="tag k" title="' + tip + '강퇴">강퇴 ' + ch.kicks + '</span>' : '') +
+          (ch.mutes ? '<span class="tag m" title="' + tip + '채금">채금 ' + ch.mutes + '</span>' : '')
+        : '<span class="tag" title="트래키파이에서 이 사람의 이상호 방송 제재 기록을 세는 중이에요">이상호 방송 세는 중…</span>';
+      tags += (u.inRoom ? '<span class="tag in">참여 중</span>' : '');
       var items = u.sanctions.map(function(x){
         var what = x.type === 'K' ? '<span class="k">강퇴</span>' : '<span class="m">채금' + (x.muteSeconds ? ' ' + x.muteSeconds + '초' : '') + '</span>';
         var chats = x.messages.length ? x.messages.map(function(m){
