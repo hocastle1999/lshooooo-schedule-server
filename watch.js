@@ -29,6 +29,20 @@ let chatStatus = { state: 'connecting', message: '연결 준비 중', title: '' 
 let connectedAt = 0;
 // 채팅 서버가 주는 아이디 그대로("abc(2)" = 같은 아이디의 두 번째 접속) → { id, nick, manager, joinedAt }
 const viewers = new Map();
+// 아이디 → 지금 닉네임. 트래키파이 기록에는 제재받을 때의 닉네임이 남아 있어서, 그 뒤 닉네임을 바꾼 사람은
+// 채팅방 참여자 목록에서 본 닉네임으로 보여준다 (서버가 켜져 있는 동안 본 사람만).
+const nickNow = new Map();
+// 아이디는 안 바뀌니까 아이디 기준으로: 최신 닉네임 + 바로 직전 닉네임 하나.
+//   최신 = 채팅방에서 본 지금 닉네임, 못 봤으면 가장 최근 제재 기록의 닉네임
+//   직전 = 그 아이디의 제재 기록을 최신순으로 볼 때 처음 나오는 다른 닉네임 (extra 는 기록 밖에서 알게 된 닉네임들)
+function nickInfo(id, ...extra) {
+  const items = byUser.get(id) || [];
+  const latest = nickNow.get(id) || (items[0] && items[0][1]) || extra.find(Boolean) || id;
+  let prev = '';
+  for (const it of items) if (it[1] && it[1] !== latest) { prev = it[1]; break; }
+  if (!prev) prev = extra.find((n) => n && n !== latest) || '';
+  return { nick: latest, prev };
+}
 
 let sanctions = { syncedAt: 0, items: [], complete: false }; // items: [userId, nick, type(K|M), createdAt(KST), actorNick] (최신순)
 // complete: STORE_FROM 까지 예전 기록을 다 받았는지
@@ -58,6 +72,18 @@ function unpackRows(text) {
 }
 async function saveSanctions() {
   await setState(SANCTIONS_KEY, { syncedAt: sanctions.syncedAt, complete: Boolean(sanctions.complete), rows: packRows(sanctions.items) });
+}
+
+// 한 사람의 이상호 방송 제재를 기간별로 (7일·30일·90일·전체). 🔍 창에서 바깥 화면 숫자와 맞춰 보라고.
+function channelPeriods(id) {
+  const items = byUser.get(id) || [];
+  const out = {};
+  for (const [key, since] of [['7', kstString(-7)], ['30', kstString(-30)], ['90', kstString(-90)], ['all', STORE_FROM]]) {
+    let k = 0, m = 0;
+    for (const it of items) { if (it[3] < since) break; if (it[2] === 'K') k++; else m++; }
+    out[key] = { total: k + m, kicks: k, mutes: m };
+  }
+  return out;
 }
 
 // 최신순 목록에서 since 이후 개수
@@ -273,12 +299,14 @@ function onPacket({ code, parts }) {
       if (parts[i] === '-1' || !parts[i]) continue;
       if (!viewers.has(parts[i])) {
         viewers.set(parts[i], { id: normId(parts[i]), nick: parts[i + 1], joinedAt: 0 });
+        if (parts[i + 1]) nickNow.set(normId(parts[i]), parts[i + 1]);
         if (isManager(parts[i + 2])) managerIds.add(normId(parts[i]));
       }
     }
   } else if (parts[0] === '1' && parts[1]) {
     // 입장: 1 | 아이디 | 닉네임 | flag
     viewers.set(parts[1], { id: normId(parts[1]), nick: parts[2] || '', joinedAt: Date.now() });
+    if (parts[2]) nickNow.set(normId(parts[1]), parts[2]);
     if (isManager(parts[3])) managerIds.add(normId(parts[1])); // 표시가 없이 들어와도 매니저 목록에서 빼지는 않는다
   } else if (parts[0] === '-1' && parts[1]) {
     viewers.delete(parts[1]); // 일반 퇴장·강퇴 모두
@@ -331,6 +359,7 @@ function snapshot(days, min) {
     list.push({
       id,
       nick: v.nick || recent[0][1],
+      oldNick: nickInfo(id, v.nick).prev,
       total: recent.length,
       kicks,
       mutes: recent.length - kicks,
@@ -521,6 +550,9 @@ async function daySanctions(date) {
   const list = [...byId.values()].map((u) => {
     u.sanctions.sort((a, b) => (a.at < b.at ? 1 : -1));
     u.inRoom = present.has(u.id);
+    const ni = nickInfo(u.id, u.nick);
+    u.nick = ni.nick;
+    u.oldNick = ni.prev;
     // 이 방송 최근 90일: 저장해 둔 기록(15분마다 갱신)에 아직 안 들어온 그날 제재까지 합쳐서 센다
     const seen = new Set();
     let k90 = 0, m90 = 0;
@@ -575,6 +607,8 @@ function mount(app) {
         total: list.total || 0,
         more: Boolean(list.more),
         inRoom: chatStatus.state === 'live' && presentUsers().has(id),
+        ...(() => { const ni = nickInfo(id, summary && summary.userNick); return { nickNow: ni.nick, prevNick: ni.prev }; })(),
+        periods: page === 1 ? channelPeriods(id) : null,
         channel: here && { total: here.k + here.m, kicks: here.k, mutes: here.m },
         summary: summary && {
           nick: summary.userNick || '',
@@ -626,7 +660,8 @@ function mount(app) {
       const total = kicks + mutes;
       if (!total) continue;
       sanctionCount += total;
-      rows.push({ id, nick: nick || id, total, kicks, mutes, last, inRoom: present.has(id) });
+      const ni = nickInfo(id, nick);
+      rows.push({ id, nick: ni.nick, oldNick: ni.prev, total, kicks, mutes, last, inRoom: present.has(id) });
     }
     let progress = null;
     if (scope === 'all') {

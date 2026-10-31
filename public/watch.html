@@ -106,6 +106,14 @@
   .hx-row .st{font-weight:700;}
   .hx-row .st.me{color:var(--accent);}
   .hx-more{width:100%;margin-top:10px;}
+  .old-nick{font-size:11.5px;color:var(--text-dim);margin-left:4px;}
+  .hx-periods{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:8px 0 2px;}
+  .hx-period{border:1px solid var(--border);border-radius:10px;padding:7px 8px;text-align:center;background:var(--surface-2);}
+  .hx-period .l{font-size:11px;color:var(--text-dim);}
+  .hx-period .v{font-size:16px;font-weight:800;}
+  .hx-period .s{font-size:10.5px;color:var(--text-dim);}
+  .hx-period.on{border-color:var(--accent);background:var(--accent-soft);}
+  .hx-period.on .l,.hx-period.on .v{color:var(--accent-ink);}
   .hx-modes{display:flex;gap:6px;padding:10px 16px 0;}
   .hx-mode{font:inherit;font-size:12.5px;font-weight:700;border:1px solid var(--border);background:var(--surface-2);color:var(--text-dim);border-radius:999px;padding:6px 13px;cursor:pointer;}
   .hx-mode.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-ink);}
@@ -343,7 +351,7 @@
     body.innerHTML = d.list.map(function(u){
       var name = '<button type="button" class="copy" data-copy="'+esc(u.nick)+'" title="닉네임 복사">'+esc(u.nick)+'</button>' +
         (u.id!==u.nick ? ' <span class="uid">(<button type="button" class="copy" data-copy="'+esc(u.id)+'" title="아이디 복사">'+esc(u.id)+'</button>)</span>' : '') +
-        magBtn(u.id, u.nick);
+        oldNickHTML(u) + magBtn(u.id, u.nick, String(d.days));
       if (u.joinedAt) name += '<span class="new" title="'+hm(u.joinedAt)+' 입장">새로 입장 '+hm(u.joinedAt)+'</span>';
       var row = '<tr class="row" data-id="'+esc(u.id)+'"><td class="name">'+name+'</td>'+
         '<td class="num total">'+fmt(u.total)+'</td><td class="num">'+fmt(u.kicks)+'</td><td class="num">'+fmt(u.mutes)+'</td>'+
@@ -464,7 +472,7 @@
     $('dayList').innerHTML = list.map(function(u){
       var name = '<button type="button" class="copy sx-name" data-copy="' + esc(u.nick) + '" title="닉네임 복사">' + esc(u.nick) + '</button>' +
         (u.id !== u.nick ? '<span class="uid">(<button type="button" class="copy" data-copy="' + esc(u.id) + '" title="아이디 복사">' + esc(u.id) + '</button>)</span>' : '') +
-        magBtn(u.id, u.nick);
+        oldNickHTML(u) + magBtn(u.id, u.nick, 'all');
       // 라벨은 🔍 창과 같은 기준: 이상호 방송에서 지금까지 받은 제재 전체 (트래키파이 기록).
       // 서버가 사람마다 차례로 세는 중이면 잠깐 '세는 중'으로 나온다.
       var ch = u.channel, tip = '이상호 방송에서 지금까지 받은 ';
@@ -497,13 +505,18 @@
   });
 
   // ---- 🔍 한 사람의 제재 이력 (최근 90일) ----
-  function magBtn(id, nick){
-    return '<button type="button" class="mag" data-hist="' + esc(id) + '" data-nick="' + esc(nick) + '" title="제재 이력 보기" aria-label="제재 이력 보기">🔍</button>';
+  // period: 🔍를 누른 화면이 보고 있던 기간 ('7'·'30'·'90'·'all'). 창 안에서 같은 기간 숫자를 강조한다.
+  function magBtn(id, nick, period){
+    return '<button type="button" class="mag" data-hist="' + esc(id) + '" data-nick="' + esc(nick) + '" data-period="' + esc(period || '') + '" title="제재 이력 보기" aria-label="제재 이력 보기">🔍</button>';
+  }
+  // 같은 아이디가 닉네임을 바꿨으면 바로 직전 닉네임 하나만 작게 붙인다
+  function oldNickHTML(u){
+    return u.oldNick ? '<span class="old-nick" title="바로 직전 닉네임">이전 닉 ' + esc(u.oldNick) + '</span>' : '';
   }
   function closeHist(){ var o = document.querySelector('.hx-overlay'); if (o) o.remove(); }
   // 다른 방송에서 받은 제재까지 전부 보여준다 (트래키파이 '유저 제재 이력 부검'과 같은 데이터).
   // 위쪽 '전체 방송 / 이상호 방송만'으로 바꿔 볼 수 있다. 고른 쪽은 이 브라우저에 기억한다.
-  async function openHist(id, nick){
+  async function openHist(id, nick, period){
     closeHist();
     var mode = 'all';
     try { if (localStorage.getItem('hist-mode') === 'here') mode = 'here'; } catch(e) {}
@@ -556,7 +569,14 @@
       try {
         var d = await loadPage(), sm = d.summary || {};
         if (my !== token) return; // 그사이 다른 쪽을 눌렀으면 버린다
-        if (sm.nick && !nick) wrap.querySelector('.hx-head h3').firstChild.textContent = sm.nick;
+        // 지금 닉네임(채팅방에서 본 것)이 있으면 그걸로, 없으면 트래키파이 닉네임
+        var nowNick = d.nickNow || nick || sm.nick;
+        if (nowNick && !wrap.dataset.named) {
+          wrap.dataset.named = '1';
+          var h3 = wrap.querySelector('.hx-head h3');
+          h3.firstChild.textContent = nowNick;
+          if (d.prevNick) h3.insertAdjacentHTML('beforeend', ' <span class="old-nick" title="바로 직전 닉네임">이전 닉 ' + esc(d.prevNick) + '</span>');
+        }
         if (d.inRoom && !inRoomShown) { inRoomShown = true; wrap.querySelector('.hx-head h3').insertAdjacentHTML('beforeend', ' <span class="tag in">참여 중</span>'); }
         var cards, extra = '', empty;
         if (mode === 'here') {
@@ -566,6 +586,14 @@
             '<div class="hx-card"><div class="l">이상호 방송 제재</div><div class="v">' + fmt(c.total) + '</div></div>' +
             '<div class="hx-card"><div class="l">강퇴 (이상호 방송)</div><div class="v k">' + fmt(c.kicks) + '</div><div class="s">채금 ' + fmt(c.mutes) + '</div></div>' +
             '<div class="hx-card"><div class="l">모든 방송 합계</div><div class="v">' + fmt(sm.total || 0) + '</div><div class="s">스트리머 ' + fmt(sm.streamerCount || 0) + '명</div></div>';
+          // 기간별 이상호 방송 숫자. 🔍를 누른 화면의 기간을 강조해서 바깥 숫자와 맞춰 볼 수 있게.
+          if (d.periods) {
+            var P = [['7','최근 7일'],['30','최근 30일'],['90','최근 90일'],['all','전체 기간']];
+            extra = '<div class="hx-periods">' + P.map(function(x){
+              var v = d.periods[x[0]];
+              return '<div class="hx-period' + (period === x[0] ? ' on' : '') + '"><div class="l">' + x[1] + '</div><div class="v">' + fmt(v.total) + '</div><div class="s">강퇴 ' + v.kicks + ' · 채금 ' + v.mutes + '</div></div>';
+            }).join('') + '</div>';
+          }
         } else {
           // 자주 제재한 스트리머 목록(상위 몇 명)에 이 방송이 있을 때만 '이 방송 N건'을 붙인다
           var mine = ((sm.topStreamers || []).find(function(t){ return t.id === 'lshooooo'; }) || {}).count || 0;
@@ -618,7 +646,7 @@
   }
   document.addEventListener('click', function(e){
     var b = e.target.closest('[data-hist]');
-    if (b) { openHist(b.getAttribute('data-hist'), b.getAttribute('data-nick')); return; }
+    if (b) { openHist(b.getAttribute('data-hist'), b.getAttribute('data-nick'), b.getAttribute('data-period')); return; }
     var o = e.target.closest('.hx-overlay');
     if (o && (e.target === o || e.target.closest('[data-hx-close]'))) closeHist();
   });
@@ -685,7 +713,7 @@
     $('rankBody').innerHTML = list.map(function(u){
       var name = '<button type="button" class="copy" data-copy="' + esc(u.nick) + '" title="닉네임 복사">' + esc(u.nick) + '</button>' +
         (u.id !== u.nick ? ' <span class="uid">(<button type="button" class="copy" data-copy="' + esc(u.id) + '" title="아이디 복사">' + esc(u.id) + '</button>)</span>' : '') +
-        magBtn(u.id, u.nick) + (u.inRoom ? ' <span class="tag in">참여 중</span>' : '');
+        oldNickHTML(u) + magBtn(u.id, u.nick, String(d.days)) + (u.inRoom ? ' <span class="tag in">참여 중</span>' : '');
       return '<tr><td class="rank' + (u.rank <= 3 ? ' top' : '') + '">' + u.rank + '</td><td class="name">' + name + '</td>' +
         col('total', u.total) + col('kicks', u.kicks) + col('mutes', u.mutes) +
         (allScope ? '<td class="num" title="강퇴 ' + u.here.kicks + ' · 채금 ' + u.here.mutes + '">' + fmt(u.here.total) + '</td>' : '') +
