@@ -143,6 +143,16 @@
   .chat div{font-size:13px;line-height:1.45;word-break:break-word;}
   .chat .t{font-family:ui-monospace,Consolas,monospace;font-size:11.5px;color:var(--text-dim);margin-right:8px;}
   .chat .none{color:var(--text-dim);font-size:12px;}
+  .seg{display:inline-flex;border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+  .seg button{font:inherit;font-size:13px;font-weight:600;border:none;background:var(--surface-2);color:var(--text-dim);padding:8px 13px;cursor:pointer;}
+  .seg button+button{border-left:1px solid var(--border);}
+  .seg button.on{background:var(--accent-soft);color:var(--accent-ink);font-weight:800;}
+  .rank{font-weight:800;text-align:center;width:44px;}
+  .rank.top{color:var(--warm);}
+  th.sorted,td.sorted{color:var(--accent);}
+  td.sorted{font-weight:800;}
+  th.sortable{cursor:pointer;}
+  th.sortable:hover{color:var(--accent);}
   .hint{font-size:12px;color:var(--text-dim);line-height:1.6;margin-top:10px;}
   .hint a{color:var(--accent);}
 </style>
@@ -161,6 +171,7 @@
   <div class="pages">
     <button type="button" class="page-tab on" data-page="1"><span class="n">1</span>제재 이력 참여자</button>
     <button type="button" class="page-tab" data-page="2"><span class="n">2</span>제재내역</button>
+    <button type="button" class="page-tab" data-page="3"><span class="n">3</span>제재 순위</button>
   </div>
 
   <div id="page1">
@@ -224,6 +235,40 @@
       <div class="hint">
         <a href="https://www.trackify.kr/soop/lshooooo?tab=sanctions" target="_blank" rel="noopener noreferrer">트래키파이</a>에 올라온 그날의 강퇴·채금 기록과 제재 직전 채팅입니다. 오늘 기록은 1분마다 새로 받아와요.
         마지막으로 제재당한 순서대로 보이고, <span class="tag in">참여 중</span>은 지금 방송에 들어와 있는 사람입니다. 닉네임이나 아이디를 누르면 복사되고, 🔍를 누르면 다른 방송까지 포함한 전체 제재 이력이 보여요.
+      </div>
+    </section>
+  </div>
+
+  <div id="page3" hidden>
+    <section class="card">
+      <div class="controls">
+        <label class="ctl">기간
+          <span class="seg" id="rankDays"><button type="button" data-v="7">7일</button><button type="button" data-v="30">30일</button><button type="button" data-v="90">90일</button></span>
+        </label>
+        <label class="ctl">정렬
+          <span class="seg" id="rankSort"><button type="button" data-v="total">전체 제재수</button><button type="button" data-v="kicks">강퇴</button><button type="button" data-v="mutes">채금</button></span>
+        </label>
+        <label class="ctl">찾기<input type="text" id="rankQ" class="search" placeholder="닉네임 또는 아이디"></label>
+      </div>
+      <div class="stats" id="rankStats"></div>
+      <div class="error" id="rankError" hidden></div>
+    </section>
+
+    <section class="card">
+      <h2>제재 순위 <span class="badge" id="rankBadge">이상호 방송</span></h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th class="rank">순위</th><th>닉네임(아이디)</th>
+            <th class="num sortable" data-sort="total">전체</th><th class="num sortable" data-sort="kicks">강퇴</th><th class="num sortable" data-sort="mutes">채금</th>
+            <th>마지막 제재</th>
+          </tr></thead>
+          <tbody id="rankBody"><tr class="empty"><td colspan="6">불러오는 중…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="hint">
+        이상호 방송에서 받은 강퇴·채금을 사람별로 센 순위예요 (트래키파이 기록, 최근 90일까지, 15분마다 갱신). 상위 200명까지 보여요.
+        표 머리의 전체·강퇴·채금을 눌러도 정렬이 바뀌어요. <span class="tag in">참여 중</span>은 지금 방송에 들어와 있는 사람이고, 🔍를 누르면 그 사람의 제재 이력이 보여요.
       </div>
     </section>
   </div>
@@ -356,7 +401,8 @@
   // ---- 페이지 전환 (1: 제재 이력 참여자, 2: 오늘 제재당한 시청자) ----
   var PAGE_DESC = {
     '1': '지금 방송에 들어와 있는 참여자 중 최근 제재(강퇴·채금)를 많이 받은 사람',
-    '2': '그날 강퇴·채금당한 시청자와 제재 직전 채팅'
+    '2': '그날 강퇴·채금당한 시청자와 제재 직전 채팅',
+    '3': '이상호 방송에서 제재를 많이 받은 순위'
   };
   var currentPage = '1';
   function showPage(n){
@@ -364,9 +410,11 @@
     document.querySelectorAll('.page-tab').forEach(function(b){ b.classList.toggle('on', b.dataset.page === n); });
     $('page1').hidden = n !== '1';
     $('page2').hidden = n !== '2';
+    $('page3').hidden = n !== '3';
     document.querySelector('.brand p').textContent = PAGE_DESC[n];
-    try { history.replaceState(null, '', n === '2' ? '#today' : '#'); } catch(e) {}
+    try { history.replaceState(null, '', n === '2' ? '#today' : n === '3' ? '#rank' : '#'); } catch(e) {}
     if (n === '2') loadDay();
+    if (n === '3') loadRank();
   }
   document.querySelector('.pages').addEventListener('click', function(e){
     var b = e.target.closest('[data-page]'); if (b) showPage(b.dataset.page);
@@ -570,8 +618,66 @@
   });
   document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeHist(); });
 
+  // ---- 3페이지: 제재 순위 ----
+  var rankOpt = { days: '30', sort: 'total' }, rankData = null, rankTimer = null;
+  try { var ro = JSON.parse(localStorage.getItem('rank-opt') || '{}'); if (ro.days) rankOpt.days = ro.days; if (ro.sort) rankOpt.sort = ro.sort; } catch(e) {}
+  var SORT_LABEL = { total: '전체 제재수', kicks: '강퇴', mutes: '채금' };
+  function paintRankOpt(){
+    document.querySelectorAll('#rankDays [data-v]').forEach(function(b){ b.classList.toggle('on', b.dataset.v === rankOpt.days); });
+    document.querySelectorAll('#rankSort [data-v]').forEach(function(b){ b.classList.toggle('on', b.dataset.v === rankOpt.sort); });
+    document.querySelectorAll('#page3 th[data-sort]').forEach(function(th){ th.classList.toggle('sorted', th.dataset.sort === rankOpt.sort); });
+  }
+  function setRank(k, v){
+    if (rankOpt[k] === v) return;
+    rankOpt[k] = v;
+    try { localStorage.setItem('rank-opt', JSON.stringify(rankOpt)); } catch(e) {}
+    paintRankOpt();
+    loadRank();
+  }
+  async function loadRank(){
+    clearTimeout(rankTimer);
+    if (currentPage !== '3') return;
+    var want = rankOpt.days + '|' + rankOpt.sort;
+    try {
+      var res = await fetch('/api/sanctions/ranking?days=' + rankOpt.days + '&sort=' + rankOpt.sort + '&limit=200');
+      var d = await res.json();
+      if (!res.ok) throw new Error(d.error || ('HTTP ' + res.status));
+      if (want !== rankOpt.days + '|' + rankOpt.sort) return; // 그사이 옵션을 바꿨으면 버린다
+      rankData = d; $('rankError').hidden = true; renderRank();
+    } catch(e) { $('rankError').textContent = '순위를 불러오지 못했어요: ' + e.message; $('rankError').hidden = false; }
+    rankTimer = setTimeout(loadRank, 60000);
+  }
+  function renderRank(){
+    var d = rankData; if (!d) return;
+    var q = $('rankQ').value.trim().toLowerCase();
+    var list = d.list.filter(function(u){ return !q || u.nick.toLowerCase().indexOf(q) >= 0 || u.id.toLowerCase().indexOf(q) >= 0; });
+    $('rankStats').innerHTML = '<span>최근 ' + d.days + '일 제재 <b>' + fmt(d.sanctions) + '</b>건</span><span>제재받은 시청자 <b>' + fmt(d.people) + '</b>명</span>' +
+      '<span>정렬 <b>' + SORT_LABEL[d.sort] + '</b></span>' + (d.syncedAt ? '<span>기록 갱신 ' + ago(d.syncedAt) + '</span>' : '');
+    $('rankBadge').textContent = '이상호 방송 · 최근 ' + d.days + '일';
+    if (!list.length) { $('rankBody').innerHTML = '<tr class="empty"><td colspan="6">' + (q ? '찾는 시청자가 없어요.' : (d.syncedAt ? '이 기간에 제재 기록이 없어요.' : '제재 기록을 받는 중이에요. 잠시 후 다시 확인해주세요.')) + '</td></tr>'; return; }
+    var col = function(k, v){ return '<td class="num' + (d.sort === k ? ' sorted' : '') + '">' + fmt(v) + '</td>'; };
+    $('rankBody').innerHTML = list.map(function(u){
+      var name = '<button type="button" class="copy" data-copy="' + esc(u.nick) + '" title="닉네임 복사">' + esc(u.nick) + '</button>' +
+        (u.id !== u.nick ? ' <span class="uid">(<button type="button" class="copy" data-copy="' + esc(u.id) + '" title="아이디 복사">' + esc(u.id) + '</button>)</span>' : '') +
+        magBtn(u.id, u.nick) + (u.inRoom ? ' <span class="tag in">참여 중</span>' : '');
+      return '<tr><td class="rank' + (u.rank <= 3 ? ' top' : '') + '">' + u.rank + '</td><td class="name">' + name + '</td>' +
+        col('total', u.total) + col('kicks', u.kicks) + col('mutes', u.mutes) + '<td>' + kst(u.last) + '</td></tr>';
+    }).join('');
+  }
+  $('rankDays').addEventListener('click', function(e){ var b = e.target.closest('[data-v]'); if (b) setRank('days', b.dataset.v); });
+  $('rankSort').addEventListener('click', function(e){ var b = e.target.closest('[data-v]'); if (b) setRank('sort', b.dataset.v); });
+  document.querySelector('#page3 thead').addEventListener('click', function(e){ var th = e.target.closest('th[data-sort]'); if (th) setRank('sort', th.dataset.sort); });
+  $('rankQ').addEventListener('input', renderRank);
+  $('rankBody').addEventListener('click', function(e){
+    var btn = e.target.closest('[data-copy]'); if (!btn) return;
+    var text = btn.getAttribute('data-copy');
+    copyText(text); btn.classList.add('done'); toast('“' + text + '” 복사했어요');
+  });
+  paintRankOpt();
+
   poll();
   if (location.hash === '#today') showPage('2');
+  if (location.hash === '#rank') showPage('3');
 })();
 </script>
 </body>

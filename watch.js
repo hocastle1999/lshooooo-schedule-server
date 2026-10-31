@@ -487,6 +487,38 @@ function mount(app) {
     }
   });
 
+  // 제재 순위 (3페이지): 저장해 둔 이 방송 제재 기록(최근 90일)에서 기간 안의 제재를 사람별로 센다.
+  app.get('/api/sanctions/ranking', async (req, res) => {
+    await ensureLoaded();
+    const days = Math.min(KEEP_DAYS, Math.max(1, parseInt(req.query.days, 10) || 30));
+    const sort = ['total', 'kicks', 'mutes'].includes(req.query.sort) ? req.query.sort : 'total';
+    const limit = Math.min(500, Math.max(10, parseInt(req.query.limit, 10) || 100));
+    const cutoff = kstString(-days);
+    const present = chatStatus.state === 'live' ? presentUsers() : new Map();
+    const rows = [];
+    let sanctionCount = 0;
+    for (const [id, items] of byUser) {
+      let kicks = 0, mutes = 0, last = '', nick = '';
+      for (const it of items) { // 최신순
+        if (it[3] < cutoff) break;
+        if (it[2] === 'K') kicks++; else mutes++;
+        if (!last) { last = it[3]; nick = it[1]; }
+      }
+      const total = kicks + mutes;
+      if (!total) continue;
+      sanctionCount += total;
+      rows.push({ id, nick: nick || id, total, kicks, mutes, last, inRoom: present.has(id) });
+    }
+    // 고른 기준 → 전체 → 최근 제재 순으로 정렬. 같은 숫자면 같은 순위.
+    rows.sort((a, b) => b[sort] - a[sort] || b.total - a.total || (a.last < b.last ? 1 : -1));
+    let rank = 0, prev = null;
+    rows.forEach((r, i) => { if (r[sort] !== prev) { rank = i + 1; prev = r[sort]; } r.rank = rank; });
+    res.json({
+      days, sort, syncedAt: sanctions.syncedAt, people: rows.length, sanctions: sanctionCount,
+      list: rows.slice(0, limit),
+    });
+  });
+
   // 이 방송에서 받은 최근 90일 제재만 (저장해 둔 기록에서).
   app.get('/api/sanctions/user', async (req, res) => {
     await ensureLoaded();
