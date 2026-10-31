@@ -242,8 +242,11 @@
   <div id="page3" hidden>
     <section class="card">
       <div class="controls">
+        <label class="ctl">기준
+          <span class="seg" id="rankScope"><button type="button" data-v="here">이상호 방송</button><button type="button" data-v="all">전체 방송</button></span>
+        </label>
         <label class="ctl">기간
-          <span class="seg" id="rankDays"><button type="button" data-v="7">7일</button><button type="button" data-v="30">30일</button><button type="button" data-v="90">90일</button></span>
+          <span class="seg" id="rankDays"><button type="button" data-v="7">7일</button><button type="button" data-v="30">30일</button><button type="button" data-v="90">90일</button><button type="button" data-v="all">전체</button></span>
         </label>
         <label class="ctl">정렬
           <span class="seg" id="rankSort"><button type="button" data-v="total">전체 제재수</button><button type="button" data-v="kicks">강퇴</button><button type="button" data-v="mutes">채금</button></span>
@@ -261,13 +264,16 @@
           <thead><tr>
             <th class="rank">순위</th><th>닉네임(아이디)</th>
             <th class="num sortable" data-sort="total">전체</th><th class="num sortable" data-sort="kicks">강퇴</th><th class="num sortable" data-sort="mutes">채금</th>
+            <th class="num" id="rankHereHead" hidden title="이 기간에 이상호 방송에서 받은 제재">이상호 방송</th>
             <th>마지막 제재</th>
           </tr></thead>
           <tbody id="rankBody"><tr class="empty"><td colspan="6">불러오는 중…</td></tr></tbody>
         </table>
       </div>
       <div class="hint">
-        이상호 방송에서 받은 강퇴·채금을 사람별로 센 순위예요 (트래키파이 기록, 최근 90일까지, 15분마다 갱신). 상위 200명까지 보여요.
+        <b>이상호 방송</b>: 이상호 방송에서 받은 강퇴·채금을 사람별로 센 순위예요 (트래키파이 기록, 15분마다 갱신).
+        <b>전체 방송</b>: 이 기간에 이상호 방송에서 많이 제재받은 상위 300명을, 다른 방송까지 합친 제재 수로 다시 줄 세운 순위예요. 사람마다 트래키파이에 물어봐야 해서 이 화면을 보고 있는 동안 조금씩 채워져요.
+        상위 200명까지 보여요.
         표 머리의 전체·강퇴·채금을 눌러도 정렬이 바뀌어요. <span class="tag in">참여 중</span>은 지금 방송에 들어와 있는 사람이고, 🔍를 누르면 그 사람의 제재 이력이 보여요.
       </div>
     </section>
@@ -619,12 +625,13 @@
   document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeHist(); });
 
   // ---- 3페이지: 제재 순위 ----
-  var rankOpt = { days: '30', sort: 'total' }, rankData = null, rankTimer = null;
-  try { var ro = JSON.parse(localStorage.getItem('rank-opt') || '{}'); if (ro.days) rankOpt.days = ro.days; if (ro.sort) rankOpt.sort = ro.sort; } catch(e) {}
+  var rankOpt = { days: '30', sort: 'total', scope: 'here' }, rankData = null, rankTimer = null;
+  try { var ro = JSON.parse(localStorage.getItem('rank-opt') || '{}'); if (ro.days) rankOpt.days = ro.days; if (ro.sort) rankOpt.sort = ro.sort; if (ro.scope) rankOpt.scope = ro.scope; } catch(e) {}
   var SORT_LABEL = { total: '전체 제재수', kicks: '강퇴', mutes: '채금' };
   function paintRankOpt(){
     document.querySelectorAll('#rankDays [data-v]').forEach(function(b){ b.classList.toggle('on', b.dataset.v === rankOpt.days); });
     document.querySelectorAll('#rankSort [data-v]').forEach(function(b){ b.classList.toggle('on', b.dataset.v === rankOpt.sort); });
+    document.querySelectorAll('#rankScope [data-v]').forEach(function(b){ b.classList.toggle('on', b.dataset.v === rankOpt.scope); });
     document.querySelectorAll('#page3 th[data-sort]').forEach(function(th){ th.classList.toggle('sorted', th.dataset.sort === rankOpt.sort); });
   }
   function setRank(k, v){
@@ -637,35 +644,57 @@
   async function loadRank(){
     clearTimeout(rankTimer);
     if (currentPage !== '3') return;
-    var want = rankOpt.days + '|' + rankOpt.sort;
+    var want = rankOpt.days + '|' + rankOpt.sort + '|' + rankOpt.scope;
+    var next = 60000;
     try {
-      var res = await fetch('/api/sanctions/ranking?days=' + rankOpt.days + '&sort=' + rankOpt.sort + '&limit=200');
+      var res = await fetch('/api/sanctions/ranking?days=' + rankOpt.days + '&sort=' + rankOpt.sort + '&scope=' + rankOpt.scope + '&limit=200');
       var d = await res.json();
       if (!res.ok) throw new Error(d.error || ('HTTP ' + res.status));
-      if (want !== rankOpt.days + '|' + rankOpt.sort) return; // 그사이 옵션을 바꿨으면 버린다
+      if (want !== rankOpt.days + '|' + rankOpt.sort + '|' + rankOpt.scope) return; // 그사이 옵션을 바꿨으면 버린다
       rankData = d; $('rankError').hidden = true; renderRank();
+      // 전체 방송 숫자를 채우는 중이면 자주 다시 불러온다 (서버는 부를 때마다 몇 명씩 더 물어본다)
+      if (d.progress && d.progress.checked < d.progress.pool) next = 12000;
     } catch(e) { $('rankError').textContent = '순위를 불러오지 못했어요: ' + e.message; $('rankError').hidden = false; }
-    rankTimer = setTimeout(loadRank, 60000);
+    rankTimer = setTimeout(loadRank, next);
   }
   function renderRank(){
     var d = rankData; if (!d) return;
     var q = $('rankQ').value.trim().toLowerCase();
     var list = d.list.filter(function(u){ return !q || u.nick.toLowerCase().indexOf(q) >= 0 || u.id.toLowerCase().indexOf(q) >= 0; });
-    $('rankStats').innerHTML = '<span>최근 ' + d.days + '일 제재 <b>' + fmt(d.sanctions) + '</b>건</span><span>제재받은 시청자 <b>' + fmt(d.people) + '</b>명</span>' +
+    var period = d.days === 'all' ? '전체 기간' : '최근 ' + d.days + '일';
+    var allScope = d.scope === 'all';
+    var stats = '<span>' + period + ' 이상호 방송 제재 <b>' + fmt(d.sanctions) + '</b>건</span>' +
+      (allScope ? '<span>전체 방송 숫자 확인 <b>' + fmt(d.progress.checked) + '</b> / ' + fmt(d.progress.pool) + '명' + (d.progress.checked < d.progress.pool ? ' (채우는 중…)' : '') + '</span>'
+                : '<span>제재받은 시청자 <b>' + fmt(d.people) + '</b>명</span>') +
       '<span>정렬 <b>' + SORT_LABEL[d.sort] + '</b></span>' + (d.syncedAt ? '<span>기록 갱신 ' + ago(d.syncedAt) + '</span>' : '');
-    $('rankBadge').textContent = '이상호 방송 · 최근 ' + d.days + '일';
-    if (!list.length) { $('rankBody').innerHTML = '<tr class="empty"><td colspan="6">' + (q ? '찾는 시청자가 없어요.' : (d.syncedAt ? '이 기간에 제재 기록이 없어요.' : '제재 기록을 받는 중이에요. 잠시 후 다시 확인해주세요.')) + '</td></tr>'; return; }
+    if (d.days === 'all' && d.history && !d.history.complete) stats += '<span>예전 기록 받는 중… (지금 ' + d.history.from + '부터 있음)</span>';
+    $('rankStats').innerHTML = stats;
+    $('rankBadge').textContent = (allScope ? '전체 방송' : '이상호 방송') + ' · ' + period;
+    $('rankHereHead').hidden = !allScope;
+    document.querySelectorAll('#page3 th[data-sort]').forEach(function(th){
+      th.textContent = { total: '전체', kicks: '강퇴', mutes: '채금' }[th.dataset.sort] + (allScope ? ' (모든 방송)' : '');
+    });
+    var cols = allScope ? 7 : 6;
+    if (!list.length) {
+      var why = q ? '찾는 시청자가 없어요.' : !d.syncedAt ? '제재 기록을 받는 중이에요. 잠시 후 다시 확인해주세요.'
+        : allScope && d.progress.pool ? '전체 방송 숫자를 트래키파이에서 받는 중이에요. 잠시만 기다려주세요.' : '이 기간에 제재 기록이 없어요.';
+      $('rankBody').innerHTML = '<tr class="empty"><td colspan="' + cols + '">' + why + '</td></tr>';
+      return;
+    }
     var col = function(k, v){ return '<td class="num' + (d.sort === k ? ' sorted' : '') + '">' + fmt(v) + '</td>'; };
     $('rankBody').innerHTML = list.map(function(u){
       var name = '<button type="button" class="copy" data-copy="' + esc(u.nick) + '" title="닉네임 복사">' + esc(u.nick) + '</button>' +
         (u.id !== u.nick ? ' <span class="uid">(<button type="button" class="copy" data-copy="' + esc(u.id) + '" title="아이디 복사">' + esc(u.id) + '</button>)</span>' : '') +
         magBtn(u.id, u.nick) + (u.inRoom ? ' <span class="tag in">참여 중</span>' : '');
       return '<tr><td class="rank' + (u.rank <= 3 ? ' top' : '') + '">' + u.rank + '</td><td class="name">' + name + '</td>' +
-        col('total', u.total) + col('kicks', u.kicks) + col('mutes', u.mutes) + '<td>' + kst(u.last) + '</td></tr>';
+        col('total', u.total) + col('kicks', u.kicks) + col('mutes', u.mutes) +
+        (allScope ? '<td class="num" title="강퇴 ' + u.here.kicks + ' · 채금 ' + u.here.mutes + '">' + fmt(u.here.total) + '</td>' : '') +
+        '<td>' + kst(u.last) + '</td></tr>';
     }).join('');
   }
   $('rankDays').addEventListener('click', function(e){ var b = e.target.closest('[data-v]'); if (b) setRank('days', b.dataset.v); });
   $('rankSort').addEventListener('click', function(e){ var b = e.target.closest('[data-v]'); if (b) setRank('sort', b.dataset.v); });
+  $('rankScope').addEventListener('click', function(e){ var b = e.target.closest('[data-v]'); if (b) setRank('scope', b.dataset.v); });
   document.querySelector('#page3 thead').addEventListener('click', function(e){ var th = e.target.closest('th[data-sort]'); if (th) setRank('sort', th.dataset.sort); });
   $('rankQ').addEventListener('input', renderRank);
   $('rankBody').addEventListener('click', function(e){

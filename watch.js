@@ -18,9 +18,10 @@ const keepAwake = require('./keepawake');
 
 const STREAMER = 'lshooooo';
 const SANCTIONS_KEY = 'sanctions';
-const KEEP_DAYS = 90;
+const KEEP_DAYS = 90; // 1·2페이지와 🔍 라벨이 보는 기간
+// 저장은 트래키파이에 남아 있는 기록 시작 무렵부터 전부 한다 (3페이지 '전체 기간' 순위용).
+const STORE_FROM = '2025-01-01';
 const SYNC_EVERY_MS = 15 * 60 * 1000;
-const PAGE_DELAY_MS = 700; // 트래키파이 서버 부담을 줄이기 위한 요청 간격
 const FLAG_MANAGER = 1 << 8;
 
 let chat = null;
@@ -29,7 +30,8 @@ let connectedAt = 0;
 // 채팅 서버가 주는 아이디 그대로("abc(2)" = 같은 아이디의 두 번째 접속) → { id, nick, manager, joinedAt }
 const viewers = new Map();
 
-let sanctions = { syncedAt: 0, items: [] }; // items: [userId, nick, type(K|M), createdAt(KST), actorNick]
+let sanctions = { syncedAt: 0, items: [], complete: false }; // items: [userId, nick, type(K|M), createdAt(KST), actorNick] (최신순)
+// complete: STORE_FROM 까지 예전 기록을 다 받았는지
 let byUser = new Map(); // userId → items (최신순)
 let syncing = false;
 let syncError = '';
@@ -45,6 +47,25 @@ function kstString(offsetDays = 0) {
 }
 
 // ---- 제재 이력 ----
+
+// 저장 형식: 기록이 수만 건이라 JSON 배열 대신 '탭으로 나눈 줄' 하나의 문자열로 저장해서 크기를 줄인다.
+// (Upstash 무료 플랜은 한 번에 저장할 수 있는 크기에 한도가 있다)
+function packRows(items) {
+  return items.map((it) => it.map((v) => String(v).replace(/[\t\n]/g, ' ')).join('\t')).join('\n');
+}
+function unpackRows(text) {
+  return text ? text.split('\n').map((line) => line.split('\t')) : [];
+}
+async function saveSanctions() {
+  await setState(SANCTIONS_KEY, { syncedAt: sanctions.syncedAt, complete: Boolean(sanctions.complete), rows: packRows(sanctions.items) });
+}
+
+// 최신순 목록에서 since 이후 개수
+function countSince(items, since) {
+  let n = 0;
+  for (const it of items) { if (it[3] < since) break; n++; }
+  return n;
+}
 
 function rebuildIndex() {
   byUser = new Map();
@@ -104,44 +125,97 @@ async function fetchPage(from, to, cursor, urgent = false) {
   }
 }
 
-// 최신 기록부터 받다가 이미 가진 기록만 나오면 멈춘다 (처음엔 90일치 전부).
+const toRow = (it) => [normId(it.userId), it.userNick || '', it.type === 'K' ? 'K' : 'M', it.createdAt || '', it.actorUserNick || ''];
+const rowKey = (it) => it[2] + '|' + it[0] + '|' + it[3];
+
+// 새로 받은 기록을 합친다 (같은 제재는 한 번만). 합친 개수를 돌려준다.
+function mergeRows(rows) {
+  const seen = new Set(sanctions.items.map(rowKey));
+  const items = sanctions.items.slice();
+  let added = 0;
+  for (const r of rows) {
+    if (!r[0] || seen.has(rowKey(r))) continue;
+    seen.add(rowKey(r));
+    items.push(r);
+    added++;
+  }
+  if (added) {
+    items.sort((a, b) => (a[3] < b[3] ? 1 : a[3] > b[3] ? -1 : 0));
+    sanctions = { ...sanctions, items };
+    rebuildIndex();
+  }
+  return added;
+}
+
+// 최신 기록부터 받다가 이미 가진 기록만 나오면 멈춘다. 처음이면 끝까지 다 받는다.
 async function syncSanctions() {
   if (syncing) return;
   syncing = true;
   try {
-    const cutoff = kstString(-KEEP_DAYS);
-    const keyOf = (it) => it[2] + '|' + it[0] + '|' + it[3];
-    const seen = new Set(sanctions.items.map(keyOf));
-    const added = [];
+    const seen = new Set(sanctions.items.map(rowKey));
+    const rows = [];
     let cursor = '';
     let dupPages = 0;
-    for (let page = 1; page <= 200; page++) {
-      const json = await fetchPage(cutoff.slice(0, 10), kstString(1).slice(0, 10), cursor);
+    let reachedEnd = false;
+    for (let page = 1; page <= 3000; page++) {
+      const json = await fetchPage(STORE_FROM, kstString(1).slice(0, 10), cursor);
       let newHere = 0;
       for (const it of json.items || []) {
-        const row = [normId(it.userId), it.userNick || '', it.type === 'K' ? 'K' : 'M', it.createdAt || '', it.actorUserNick || ''];
-        if (!row[0] || seen.has(keyOf(row))) continue;
-        seen.add(keyOf(row));
-        added.push(row);
+        const row = toRow(it);
+        if (!row[0] || seen.has(rowKey(row))) continue;
+        seen.add(rowKey(row));
+        rows.push(row);
         newHere++;
       }
       dupPages = newHere === 0 ? dupPages + 1 : 0;
-      if (!json.hasMore || !json.nextCursor || dupPages >= 2) break;
+      if (!json.hasMore || !json.nextCursor) { reachedEnd = true; break; }
+      if (dupPages >= 2) break;
       cursor = json.nextCursor;
-      await sleep(PAGE_DELAY_MS);
     }
-    const items = sanctions.items.concat(added).filter((it) => it[3] >= cutoff);
-    items.sort((a, b) => (a[3] < b[3] ? 1 : a[3] > b[3] ? -1 : 0));
-    sanctions = { syncedAt: Date.now(), items };
-    rebuildIndex();
+    const added = mergeRows(rows);
+    // 끝까지 받았다면 STORE_FROM 부터 지금까지 빠짐없이 가진 것
+    sanctions = { ...sanctions, syncedAt: Date.now(), complete: sanctions.complete || reachedEnd };
     syncError = '';
-    await setState(SANCTIONS_KEY, sanctions);
-    console.log(`[watch] 제재 기록 +${added.length}건 (최근 ${KEEP_DAYS}일 ${items.length}건)`);
+    await saveSanctions();
+    console.log(`[watch] 제재 기록 +${added}건 (저장 ${sanctions.items.length}건)`);
   } catch (e) {
     syncError = '제재 기록을 받지 못했습니다: ' + e.message;
     console.error('[watch]', syncError);
   } finally {
     syncing = false;
+  }
+  backfillSanctions();
+}
+
+// 예전에 90일치만 받아 두던 저장소를 STORE_FROM 까지 채운다. 중간에 끊겨도 다음에 이어서 받는다.
+let backfilling = false;
+async function backfillSanctions() {
+  if (backfilling || sanctions.complete || !sanctions.items.length) return;
+  backfilling = true;
+  try {
+    const oldest = sanctions.items[sanctions.items.length - 1][3].slice(0, 10);
+    const to = new Date(Date.parse(oldest + 'T00:00:00Z') + 86400000).toISOString().slice(0, 10);
+    console.log(`[watch] 예전 제재 기록 받기 시작 (${STORE_FROM} ~ ${oldest})`);
+    let cursor = '';
+    let buf = [];
+    for (let page = 1; page <= 3000; page++) {
+      const json = await fetchPage(STORE_FROM, to, cursor);
+      for (const it of json.items || []) buf.push(toRow(it));
+      const end = !json.hasMore || !json.nextCursor;
+      if (page % 50 === 0 || end) {
+        const added = mergeRows(buf);
+        buf = [];
+        if (end) sanctions = { ...sanctions, complete: true };
+        await saveSanctions();
+        console.log(`[watch] 예전 제재 기록 +${added}건 (저장 ${sanctions.items.length}건)`);
+      }
+      if (end) break;
+      cursor = json.nextCursor;
+    }
+  } catch (e) {
+    console.error('[watch] 예전 제재 기록 받기 실패 (다음 갱신 때 이어서):', e.message);
+  } finally {
+    backfilling = false;
   }
 }
 
@@ -260,7 +334,7 @@ function snapshot(days, min) {
       total: recent.length,
       kicks,
       mutes: recent.length - kicks,
-      allTime: all.length,
+      allTime: countSince(all, kstString(-KEEP_DAYS)),
       last: recent[0][3],
       joinedAt: v.joinedAt,
       recent: recent.slice(0, 15).map((it) => ({ type: it[2], at: it[3], by: it[4] })),
@@ -277,7 +351,7 @@ function snapshot(days, min) {
     min,
     sanctions: {
       syncedAt: sanctions.syncedAt,
-      count: sanctions.items.length,
+      count: countSince(sanctions.items, kstString(-KEEP_DAYS)),
       keepDays: KEEP_DAYS,
       syncing,
       error: syncError,
@@ -300,8 +374,12 @@ function ensureLoaded() {
   if (!loading) {
     loading = (async () => {
       const saved = await getState(SANCTIONS_KEY, null);
-      if (saved && Array.isArray(saved.items)) {
-        sanctions = saved;
+      if (saved && (typeof saved.rows === 'string' || Array.isArray(saved.items))) {
+        sanctions = {
+          syncedAt: saved.syncedAt || 0,
+          complete: Boolean(saved.complete),
+          items: typeof saved.rows === 'string' ? unpackRows(saved.rows) : saved.items, // 예전 형식(items 배열)도 읽는다
+        };
         rebuildIndex();
       }
     })();
@@ -331,7 +409,6 @@ async function fetchDay(date) {
     for (const it of json.items || []) if (String(it.createdAt || '').startsWith(date)) items.push(it);
     if (!json.hasMore || !json.nextCursor) break;
     cursor = json.nextCursor;
-    await sleep(PAGE_DELAY_MS);
   }
   dayCache.set(date, { at: Date.now(), items });
   if (dayCache.size > 20) dayCache.delete(dayCache.keys().next().value);
@@ -342,6 +419,41 @@ async function fetchDay(date) {
 // ---- 사람별 이상호 방송 제재 횟수 (전체 기간, 🔍 창과 같은 기준) ----
 // 오늘 제재당한 시청자 카드의 라벨용. 트래키파이에 사람마다 한 번씩 물어봐야 해서 줄 맨 뒤에서 천천히 채우고,
 // 받은 결과는 저장해 둔다. 그 사람이 받은 마지막 제재보다 먼저 센 결과면 다시 센다.
+// ---- 사람별 '모든 방송' 제재 요약 (3페이지 '전체 방송' 순위용) ----
+// 트래키파이에 사람마다 물어봐야 해서, 순위 화면을 누군가 보고 있을 때만 한 번에 몇 명씩 천천히 채운다.
+// 받은 결과는 저장해 두고 하루가 지나면 다시 받는다.
+const SUM_KEY = 'userSummaries';
+const SUM_TTL_MS = 24 * 3600 * 1000;
+const SUM_BATCH = 5; // 한 번에 줄 세우는 최대 인원
+let sums = null; // id → { t, k, m, s(제재한 스트리머 수), at }
+const sumPending = new Set();
+let sumSaveTimer = null;
+async function loadSums() {
+  if (!sums) sums = (await getState(SUM_KEY, null)) || {};
+  return sums;
+}
+function saveSumsSoon() {
+  if (sumSaveTimer) return;
+  sumSaveTimer = setTimeout(async () => {
+    sumSaveTimer = null;
+    const ids = Object.keys(sums);
+    if (ids.length > 5000) ids.sort((a, b) => sums[a].at - sums[b].at).slice(0, ids.length - 5000).forEach((id) => delete sums[id]);
+    try { await setState(SUM_KEY, sums); } catch (e) { console.error('[watch] 요약 저장 실패:', e.message); }
+  }, 10000);
+}
+function wantSummary(id) {
+  const c = sums[id];
+  if (c && Date.now() - c.at < SUM_TTL_MS) return c;
+  if (!sumPending.has(id) && sumPending.size < SUM_BATCH) {
+    sumPending.add(id);
+    tkFetch(`https://www.trackify.kr/api/v1/p/soop/sanctions/user/${encodeURIComponent(id)}/summary`)
+      .then((j) => { sums[id] = { t: j.total || 0, k: j.kick || 0, m: j.mute || 0, s: j.streamerCount || 0, at: Date.now() }; saveSumsSoon(); })
+      .catch((e) => console.error('[watch] 요약 받기 실패', id, e.message))
+      .finally(() => sumPending.delete(id));
+  }
+  return c || null; // 오래된 값이라도 있으면 일단 쓴다
+}
+
 const CH_KEY = 'channelCounts';
 let chCounts = null; // id → { k, m, at(KST 문자열: 센 시각) }
 const chPending = new Set();
@@ -417,7 +529,8 @@ async function daySanctions(date) {
       seen.add(type + '|' + at);
       if (type === 'K') k90++; else m90++;
     };
-    for (const it of byUser.get(u.id) || []) count(it[2], it[3]);
+    const since90 = kstString(-KEEP_DAYS);
+    for (const it of byUser.get(u.id) || []) { if (it[3] < since90) break; count(it[2], it[3]); }
     for (const x of u.sanctions) count(x.type, x.at);
     u.kicks90 = k90;
     u.mutes90 = m90;
@@ -488,14 +601,20 @@ function mount(app) {
   });
 
   // 제재 순위 (3페이지): 저장해 둔 이 방송 제재 기록(최근 90일)에서 기간 안의 제재를 사람별로 센다.
+  // days=all 이면 저장해 둔 전체 기간. scope=all 이면 '모든 방송' 숫자로 순위를 매긴다:
+  // 이 기간에 이상호 방송에서 제재받은 사람 중 이상호 방송 제재가 많은 상위 RANK_POOL 명을 후보로,
+  // 그 사람들이 모든 방송에서 받은 제재(트래키파이 요약)로 다시 정렬한다. 요약은 천천히 채워진다.
+  const RANK_POOL = 300;
   app.get('/api/sanctions/ranking', async (req, res) => {
     await ensureLoaded();
-    const days = Math.min(KEEP_DAYS, Math.max(1, parseInt(req.query.days, 10) || 30));
+    const allTime = req.query.days === 'all';
+    const days = allTime ? 'all' : Math.min(KEEP_DAYS, Math.max(1, parseInt(req.query.days, 10) || 30));
+    const scope = req.query.scope === 'all' ? 'all' : 'here';
     const sort = ['total', 'kicks', 'mutes'].includes(req.query.sort) ? req.query.sort : 'total';
     const limit = Math.min(500, Math.max(10, parseInt(req.query.limit, 10) || 100));
-    const cutoff = kstString(-days);
+    const cutoff = allTime ? STORE_FROM : kstString(-days);
     const present = chatStatus.state === 'live' ? presentUsers() : new Map();
-    const rows = [];
+    let rows = [];
     let sanctionCount = 0;
     for (const [id, items] of byUser) {
       let kicks = 0, mutes = 0, last = '', nick = '';
@@ -509,12 +628,29 @@ function mount(app) {
       sanctionCount += total;
       rows.push({ id, nick: nick || id, total, kicks, mutes, last, inRoom: present.has(id) });
     }
+    let progress = null;
+    if (scope === 'all') {
+      await loadSums();
+      rows.sort((a, b) => b.total - a.total || (a.last < b.last ? 1 : -1));
+      const pool = rows.slice(0, RANK_POOL);
+      const ranked = [];
+      for (const r of pool) {
+        const sm = wantSummary(r.id);
+        if (!sm) continue;
+        // 이상호 방송 숫자는 here 로 따로 남기고, 순위용 숫자는 모든 방송 기준으로 바꾼다
+        ranked.push({ ...r, here: { total: r.total, kicks: r.kicks, mutes: r.mutes }, total: sm.t, kicks: sm.k, mutes: sm.m, streamers: sm.s });
+      }
+      progress = { checked: ranked.length, pool: pool.length };
+      rows = ranked;
+    }
     // 고른 기준 → 전체 → 최근 제재 순으로 정렬. 같은 숫자면 같은 순위.
     rows.sort((a, b) => b[sort] - a[sort] || b.total - a.total || (a.last < b.last ? 1 : -1));
     let rank = 0, prev = null;
     rows.forEach((r, i) => { if (r[sort] !== prev) { rank = i + 1; prev = r[sort]; } r.rank = rank; });
+    const oldest = sanctions.items.length ? sanctions.items[sanctions.items.length - 1][3].slice(0, 10) : '';
     res.json({
-      days, sort, syncedAt: sanctions.syncedAt, people: rows.length, sanctions: sanctionCount,
+      days, sort, scope, syncedAt: sanctions.syncedAt, people: scope === 'all' ? progress.pool : rows.length, sanctions: sanctionCount,
+      progress, history: { from: oldest, complete: Boolean(sanctions.complete), filling: backfilling },
       list: rows.slice(0, limit),
     });
   });
@@ -524,7 +660,8 @@ function mount(app) {
     await ensureLoaded();
     const id = normId(String(req.query.id || '').trim());
     if (!id) return res.status(400).json({ error: '아이디가 필요합니다' });
-    const items = byUser.get(id) || [];
+    const since90 = kstString(-KEEP_DAYS);
+    const items = (byUser.get(id) || []).filter((it) => it[3] >= since90);
     const kicks = items.filter((it) => it[2] === 'K').length;
     res.json({
       id,
