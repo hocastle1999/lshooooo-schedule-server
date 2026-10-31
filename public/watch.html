@@ -106,6 +106,9 @@
   .hx-row .st{font-weight:700;}
   .hx-row .st.me{color:var(--accent);}
   .hx-more{width:100%;margin-top:10px;}
+  .hx-modes{display:flex;gap:6px;padding:10px 16px 0;}
+  .hx-mode{font:inherit;font-size:12.5px;font-weight:700;border:1px solid var(--border);background:var(--surface-2);color:var(--text-dim);border-radius:999px;padding:6px 13px;cursor:pointer;}
+  .hx-mode.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-ink);}
   .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--text);color:var(--bg);font-size:13px;font-weight:600;padding:9px 16px;border-radius:999px;box-shadow:var(--shadow);z-index:30;pointer-events:none;}
   tr.detail td{background:var(--surface-2);white-space:normal;padding:10px 12px;}
   .hist{display:flex;flex-wrap:wrap;gap:6px;}
@@ -445,15 +448,20 @@
   }
   function closeHist(){ var o = document.querySelector('.hx-overlay'); if (o) o.remove(); }
   // 다른 방송에서 받은 제재까지 전부 보여준다 (트래키파이 '유저 제재 이력 부검'과 같은 데이터).
+  // 위쪽 '전체 방송 / 이상호 방송만'으로 바꿔 볼 수 있다. 고른 쪽은 이 브라우저에 기억한다.
   async function openHist(id, nick){
     closeHist();
+    var mode = 'all';
+    try { if (localStorage.getItem('hist-mode') === 'here') mode = 'here'; } catch(e) {}
     var wrap = document.createElement('div');
     wrap.className = 'hx-overlay';
     wrap.innerHTML = '<div class="hx" role="dialog" aria-label="제재 이력"><div class="hx-head"><h3>' + esc(nick || id) + (nick && nick !== id ? ' <span class="uid">(' + esc(id) + ')</span>' : '') + '</h3>' +
-      '<button type="button" class="hx-close" data-hx-close aria-label="닫기">✕</button></div><div class="hx-body"><div class="hint">불러오는 중…</div></div></div>';
+      '<button type="button" class="hx-close" data-hx-close aria-label="닫기">✕</button></div>' +
+      '<div class="hx-modes"><button type="button" class="hx-mode" data-hx-mode="all">전체 방송</button><button type="button" class="hx-mode" data-hx-mode="here">이상호 방송만</button></div>' +
+      '<div class="hx-body"><div class="hint">불러오는 중…</div></div></div>';
     document.body.appendChild(wrap);
     var bodyEl = wrap.querySelector('.hx-body');
-    var loaded = 0, page = 0, lastDate = '';
+    var loaded = 0, page = 0, lastDate = '', token = 0, inRoomShown = false;
 
     function rowsHTML(items){
       return items.map(function(x){
@@ -476,7 +484,7 @@
 
     async function loadPage(){
       page++;
-      var res = await fetch('/api/sanctions/lookup?id=' + encodeURIComponent(id) + '&page=' + page);
+      var res = await fetch('/api/sanctions/lookup?id=' + encodeURIComponent(id) + '&page=' + page + (mode === 'here' ? '&channel=1' : ''));
       var d = await res.json();
       if (!res.ok) throw new Error(d.error || ('HTTP ' + res.status));
       loaded += d.items.length;
@@ -486,26 +494,53 @@
       return d.more ? '<button type="button" class="btn hx-more" data-hx-more>더 보기 (' + loaded + ' / ' + d.total + ')</button>' : '';
     }
 
-    try {
-      var d = await loadPage(), sm = d.summary || {};
-      if (sm.nick && !nick) wrap.querySelector('.hx-head h3').firstChild.textContent = sm.nick;
-      if (d.inRoom) wrap.querySelector('.hx-head h3').insertAdjacentHTML('beforeend', ' <span class="tag in">참여 중</span>');
-      // 자주 제재한 스트리머 목록(상위 몇 명)에 이 방송이 있을 때만 '이 방송 N건'을 붙인다
-      var mine = ((sm.topStreamers || []).find(function(t){ return t.id === 'lshooooo'; }) || {}).count || 0;
-      if (!sm.total) { bodyEl.innerHTML = '<div class="hint">트래키파이에 기록된 제재가 없어요.</div>'; return; }
-      bodyEl.innerHTML =
-        '<div class="hx-cards">' +
-          '<div class="hx-card"><div class="l">총 제재 (모든 방송)</div><div class="v">' + fmt(sm.total) + '</div>' + (mine ? '<div class="s">이 방송 ' + fmt(mine) + '건</div>' : '') + '</div>' +
-          '<div class="hx-card"><div class="l">강퇴 (모든 방송)</div><div class="v k">' + fmt(sm.kicks) + '</div><div class="s">채금 ' + fmt(sm.mutes) + '</div></div>' +
-          '<div class="hx-card"><div class="l">제재한 스트리머</div><div class="v">' + fmt(sm.streamerCount) + '</div></div>' +
-        '</div>' +
-        (sm.topStreamers.length ? '<div class="hx-sub">자주 제재한 스트리머</div><div class="hx-streamers">' + sm.topStreamers.map(function(t){
-          return '<span class="hx-st' + (t.id === 'lshooooo' ? ' me' : '') + '">' + esc(t.nick) + '<b>' + t.count + '건</b></span>';
-        }).join('') + '</div>' : '') +
-        '<div class="hx-sub">제재 기록</div><div class="hx-list">' + rowsHTML(d.items) + '</div>' + moreBtn(d) +
-        '<div class="hint">트래키파이의 유저 제재 이력 부검과 같은 기록이에요. 이 방송(이상호) 기록은 초록색으로 표시돼요.</div>';
-    } catch(e){ bodyEl.innerHTML = '<div class="error">제재 이력을 불러오지 못했어요: ' + esc(e.message) + '</div>'; return; }
+    async function show(){
+      var my = ++token;
+      loaded = 0; page = 0; lastDate = '';
+      wrap.querySelectorAll('[data-hx-mode]').forEach(function(b){ b.classList.toggle('on', b.dataset.hxMode === mode); });
+      bodyEl.innerHTML = '<div class="hint">불러오는 중…</div>';
+      try {
+        var d = await loadPage(), sm = d.summary || {};
+        if (my !== token) return; // 그사이 다른 쪽을 눌렀으면 버린다
+        if (sm.nick && !nick) wrap.querySelector('.hx-head h3').firstChild.textContent = sm.nick;
+        if (d.inRoom && !inRoomShown) { inRoomShown = true; wrap.querySelector('.hx-head h3').insertAdjacentHTML('beforeend', ' <span class="tag in">참여 중</span>'); }
+        var cards, extra = '', empty;
+        if (mode === 'here') {
+          var c = d.channel || { total: d.total, kicks: 0, mutes: 0 };
+          empty = !c.total;
+          cards =
+            '<div class="hx-card"><div class="l">이상호 방송 제재</div><div class="v">' + fmt(c.total) + '</div></div>' +
+            '<div class="hx-card"><div class="l">강퇴 (이상호 방송)</div><div class="v k">' + fmt(c.kicks) + '</div><div class="s">채금 ' + fmt(c.mutes) + '</div></div>' +
+            '<div class="hx-card"><div class="l">모든 방송 합계</div><div class="v">' + fmt(sm.total || 0) + '</div><div class="s">스트리머 ' + fmt(sm.streamerCount || 0) + '명</div></div>';
+        } else {
+          // 자주 제재한 스트리머 목록(상위 몇 명)에 이 방송이 있을 때만 '이 방송 N건'을 붙인다
+          var mine = ((sm.topStreamers || []).find(function(t){ return t.id === 'lshooooo'; }) || {}).count || 0;
+          empty = !sm.total;
+          cards =
+            '<div class="hx-card"><div class="l">총 제재 (모든 방송)</div><div class="v">' + fmt(sm.total) + '</div>' + (mine ? '<div class="s">이 방송 ' + fmt(mine) + '건</div>' : '') + '</div>' +
+            '<div class="hx-card"><div class="l">강퇴 (모든 방송)</div><div class="v k">' + fmt(sm.kicks) + '</div><div class="s">채금 ' + fmt(sm.mutes) + '</div></div>' +
+            '<div class="hx-card"><div class="l">제재한 스트리머</div><div class="v">' + fmt(sm.streamerCount) + '</div></div>';
+          extra = (sm.topStreamers || []).length ? '<div class="hx-sub">자주 제재한 스트리머</div><div class="hx-streamers">' + sm.topStreamers.map(function(t){
+            return '<span class="hx-st' + (t.id === 'lshooooo' ? ' me' : '') + '">' + esc(t.nick) + '<b>' + t.count + '건</b></span>';
+          }).join('') + '</div>' : '';
+        }
+        if (empty) {
+          bodyEl.innerHTML = '<div class="hx-cards">' + cards + '</div><div class="hint">' + (mode === 'here' ? '이상호 방송에서 받은 제재 기록이 없어요.' : '트래키파이에 기록된 제재가 없어요.') + '</div>';
+          return;
+        }
+        bodyEl.innerHTML = '<div class="hx-cards">' + cards + '</div>' + extra +
+          '<div class="hx-sub">' + (mode === 'here' ? '이상호 방송 제재 기록' : '제재 기록') + '</div><div class="hx-list">' + rowsHTML(d.items) + '</div>' + moreBtn(d) +
+          '<div class="hint">트래키파이의 유저 제재 이력 부검과 같은 기록이에요. 이 방송(이상호) 기록은 초록색으로 표시돼요.</div>';
+      } catch(e){ if (my === token) bodyEl.innerHTML = '<div class="error">제재 이력을 불러오지 못했어요: ' + esc(e.message) + '</div>'; }
+    }
 
+    wrap.querySelector('.hx-modes').addEventListener('click', function(e){
+      var b = e.target.closest('[data-hx-mode]');
+      if (!b || b.dataset.hxMode === mode) return;
+      mode = b.dataset.hxMode;
+      try { localStorage.setItem('hist-mode', mode); } catch(err) {}
+      show();
+    });
     bodyEl.addEventListener('click', async function(e){
       var t = e.target.closest('[data-hx-toggle]');
       if (t) {
@@ -515,14 +550,17 @@
       }
       var m = e.target.closest('[data-hx-more]');
       if (!m) return;
+      var my = token;
       m.disabled = true; m.textContent = '불러오는 중…';
       try {
         var nd = await loadPage();
+        if (my !== token) return;
         bodyEl.querySelector('.hx-list').insertAdjacentHTML('beforeend', rowsHTML(nd.items));
         m.insertAdjacentHTML('afterend', moreBtn(nd));
         m.remove();
       } catch(err){ m.disabled = false; m.textContent = '다시 시도 (' + err.message + ')'; page--; }
     });
+    show();
   }
   document.addEventListener('click', function(e){
     var b = e.target.closest('[data-hist]');

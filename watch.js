@@ -361,11 +361,11 @@ function saveChCountsSoon() {
     try { await setState(CH_KEY, chCounts); } catch (e) { console.error('[watch] 제재 횟수 저장 실패:', e.message); }
   }, 10000);
 }
-async function countChannel(id) {
+async function countChannel(id, urgent = false) {
   let k = 0, m = 0;
   const at = kstString();
   for (let page = 1; page <= 20; page++) {
-    const json = await tkFetch(`https://www.trackify.kr/api/v1/p/soop/sanctions?userId=${encodeURIComponent(id)}&broadUserId=${STREAMER}&page=${page}&size=50`);
+    const json = await tkFetch(`https://www.trackify.kr/api/v1/p/soop/sanctions?userId=${encodeURIComponent(id)}&broadUserId=${STREAMER}&page=${page}&size=50`, { urgent });
     for (const it of json.data || []) {
       if (it.broadUserId && it.broadUserId !== STREAMER) continue;
       if (it.type === 'K') k++; else m++;
@@ -374,6 +374,7 @@ async function countChannel(id) {
   }
   chCounts[id] = { k, m, at };
   saveChCountsSoon();
+  return chCounts[id];
 }
 // 아직 안 셌거나, 센 뒤에 새로 제재를 받은 사람만 줄에 세운다
 function wantChCount(id, lastSanctionAt) {
@@ -447,10 +448,13 @@ function mount(app) {
     const id = normId(String(req.query.id || '').trim());
     if (!/^[A-Za-z0-9_]{1,40}$/.test(id)) return res.status(400).json({ error: '아이디를 확인해주세요' });
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const onlyHere = req.query.channel === '1'; // 이상호 방송에서 받은 제재만
     try {
-      const [summary, list] = await Promise.all([
+      if (onlyHere) await loadChCounts();
+      const [summary, list, here] = await Promise.all([
         page === 1 ? trackifyGet(`/sanctions/user/${id}/summary`) : null,
-        trackifyGet(`/sanctions?userId=${id}&page=${page}&size=20`),
+        trackifyGet(`/sanctions?userId=${id}&page=${page}&size=20` + (onlyHere ? `&broadUserId=${STREAMER}` : '')),
+        onlyHere && page === 1 ? countChannel(id, true) : null,
       ]);
       res.json({
         id,
@@ -458,6 +462,7 @@ function mount(app) {
         total: list.total || 0,
         more: Boolean(list.more),
         inRoom: chatStatus.state === 'live' && presentUsers().has(id),
+        channel: here && { total: here.k + here.m, kicks: here.k, mutes: here.m },
         summary: summary && {
           nick: summary.userNick || '',
           total: summary.total || 0,
