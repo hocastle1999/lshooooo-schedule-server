@@ -179,6 +179,8 @@
   .day-event-row .txt{display:flex;flex-direction:column;gap:1px;overflow:hidden;}
   .day-event-row .t{font-size:11px;color:var(--accent);font-weight:700;}
   .day-event-row .n{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .day-event-row .m{font-size:12px;color:var(--text-dim);white-space:pre-wrap;word-break:break-word;margin-top:2px;}
+  .day-event-row .txt{min-width:0;flex:1;}
   .empty{font-size:12.5px;color:var(--text-dim);text-align:center;padding:14px 4px;border:1px dashed var(--border);border-radius:10px;}
   .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:9px 16px;border-radius:999px;font-size:12.5px;box-shadow:var(--shadow);z-index:30;}
   [hidden]{display:none!important;}
@@ -519,7 +521,7 @@
     var evs=(STATE.events[key]||[]).slice();
     var rows = evs.map(function(e){
       return '<div class="day-event-row">'+
-        '<div class="txt">'+(e.time?'<span class="t">'+esc(e.time)+'</span>':'')+'<span class="n">'+esc(e.title)+'</span></div>'+
+        '<div class="txt">'+(e.time?'<span class="t">'+esc(e.time)+'</span>':'')+'<span class="n">'+esc(e.title)+'</span>'+(e.memo?'<span class="m">'+esc(e.memo)+'</span>':'')+'</div>'+
         '<div style="display:flex;gap:4px;">'+
           '<button type="button" class="icon-btn" data-action="edit-event" data-key="'+key+'" data-id="'+esc(e.id)+'" aria-label="수정">✎</button>'+
           '<button type="button" class="icon-btn" data-action="delete-event" data-key="'+key+'" data-id="'+esc(e.id)+'" aria-label="삭제">✕</button>'+
