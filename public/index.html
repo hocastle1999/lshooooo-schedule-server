@@ -378,7 +378,7 @@
       body = '<form id="memo-form">'+
         '<input type="hidden" name="id" value="'+esc(page.id)+'">'+
         '<textarea class="memo-box" name="memo" placeholder="'+esc(page.title)+' 메모를 자유롭게 적어두세요">'+esc(text)+'</textarea>'+
-        '<div class="memo-foot"><span class="memo-saved" id="memo-saved-label">'+(dirty?'입력 중… (자동 저장)':'')+'</span>'+
+        '<div class="memo-foot"><span class="memo-saved" id="memo-saved-label">'+(dirty?'입력 중… (5분마다 자동 저장)':'')+'</span>'+
           '<span style="display:flex;gap:6px;">'+
             '<button type="button" class="btn memo-move" data-action="memo-move" data-id="'+esc(page.id)+'" data-dir="-1" title="왼쪽으로 옮기기" aria-label="왼쪽으로 옮기기">◀</button>'+
             '<button type="button" class="btn memo-move" data-action="memo-move" data-id="'+esc(page.id)+'" data-dir="1" title="오른쪽으로 옮기기" aria-label="오른쪽으로 옮기기">▶</button>'+
@@ -696,12 +696,16 @@
       scheduleMemoAutosave(id, 5000);
     }
   }
+  // 자동 저장은 5분마다: 처음 고친 때부터 5분 뒤에 저장한다 (계속 입력해도 미뤄지지 않음).
+  // 탭을 옮기거나 페이지를 닫을 때, 저장 버튼을 누를 때는 바로 저장한다. delay 를 주면 그 시간 뒤로 다시 맞춘다(실패 후 재시도).
+  var MEMO_AUTOSAVE_MS = 5 * 60 * 1000;
   function scheduleMemoAutosave(id, delay){
+    if(memoTimers[id] && !delay) return;
     clearTimeout(memoTimers[id]);
     memoTimers[id] = setTimeout(function(){
       delete memoTimers[id];
       if(memoDrafts[id]!==undefined) saveMemo(id, memoDrafts[id], true);
-    }, delay||1500);
+    }, delay||MEMO_AUTOSAVE_MS);
   }
   // 탭을 옮기기 전에 저장 안 된 내용이 있으면 바로 저장
   function flushMemoDrafts(){
@@ -909,7 +913,7 @@
       stashMemoDraft();
       var label = document.getElementById('memo-saved-label');
       var idEl = document.querySelector('#memo-form input[name=id]');
-      if(label && idEl) label.textContent = memoDrafts[idEl.value]!==undefined ? '입력 중… (자동 저장)' : '';
+      if(label && idEl) label.textContent = memoDrafts[idEl.value]!==undefined ? '입력 중… (5분마다 자동 저장)' : '';
       if(idEl && memoDrafts[idEl.value]!==undefined) scheduleMemoAutosave(idEl.value);
     }
   });
