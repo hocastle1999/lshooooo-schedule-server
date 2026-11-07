@@ -21,6 +21,10 @@
   label{display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:var(--text-dim);font-weight:600;}
   input{padding:11px 12px;border:1px solid var(--border);border-radius:10px;font:inherit;font-size:15px;background:var(--surface-2);color:var(--text);}
   input:focus{outline:2px solid var(--accent);outline-offset:-1px;}
+  .pw{position:relative;display:flex;}
+  .pw input{flex:1;padding-right:64px;}
+  .eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:12.5px!important;font-weight:700;padding:6px 10px!important;background:var(--surface-2)!important;color:var(--text-dim)!important;border:1px solid var(--border)!important;border-radius:8px!important;}
+  .eye:hover{color:var(--accent)!important;border-color:var(--accent)!important;}
   button{font:inherit;font-size:15px;font-weight:800;border:none;border-radius:10px;padding:12px;background:var(--accent);color:#fff;cursor:pointer;}
   button:disabled{opacity:.6;cursor:default;}
   .error{background:var(--danger-soft);color:var(--danger);border-radius:10px;padding:9px 11px;font-size:13px;}
@@ -34,7 +38,7 @@
     <div><h1>이상호 매니저 작업실</h1><p>매니저만 들어올 수 있어요</p></div>
   </div>
   <label>이름 (매니저 닉네임)<input name="name" maxlength="20" placeholder="예: 하늘하늘_" autocomplete="username" required></label>
-  <label>비밀번호<input name="password" type="password" autocomplete="current-password" required></label>
+  <label>비밀번호<span class="pw"><input name="password" type="password" autocomplete="current-password" required><button type="button" class="eye" id="eye" aria-label="비밀번호 보기" title="비밀번호 보기">보기</button></span></label>
   <div class="error" id="err" hidden></div>
   <button type="submit" id="btn">로그인</button>
   <div class="hint">한 번 로그인하면 이 브라우저에서 30일 동안 유지돼요. 이름은 변경 기록에 "누가 바꿨는지"로 남아요.</div>
@@ -44,6 +48,15 @@
   var form = document.getElementById('form'), err = document.getElementById('err'), btn = document.getElementById('btn');
   try { var saved = localStorage.getItem('managerName'); if (saved) form.name.value = saved; } catch(e) {}
   (form.name.value ? form.password : form.name).focus();
+  // 비밀번호 보기 / 숨기기
+  var eye = document.getElementById('eye');
+  eye.addEventListener('click', function(){
+    var show = form.password.type === 'password';
+    form.password.type = show ? 'text' : 'password';
+    eye.textContent = show ? '숨기기' : '보기';
+    eye.setAttribute('aria-label', show ? '비밀번호 숨기기' : '비밀번호 보기');
+    form.password.focus();
+  });
   form.addEventListener('submit', async function(e){
     e.preventDefault();
     err.hidden = true; btn.disabled = true; btn.textContent = '확인 중…';
