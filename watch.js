@@ -323,6 +323,7 @@ function startChat() {
     chatStatus = { state: s.state, message: s.message, title: s.title || '' };
     console.log(`[watch] ${STREAMER}: ${s.state} - ${s.message}`);
   });
+  chat.on('title', (title) => { chatStatus = { ...chatStatus, title }; });
   chat.on('packet', onPacket);
   keepAwake.acquire('watch');
   setInterval(resyncManagers, RESYNC_MS);

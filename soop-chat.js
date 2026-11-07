@@ -159,9 +159,14 @@ class SoopChat extends EventEmitter {
         this._ping = setInterval(() => ws.readyState === 1 && ws.send(pingPacket()), 60_000);
         // 방송이 끝나도 채팅방은 한동안 열려 있어서 연결이 안 끊긴다.
         // 그래서 1분마다 방송이 아직 켜져 있는지 직접 확인하고, 꺼졌으면 나온다.
+        // 방송 중에 제목을 바꾸면 이때 같이 알아채서 'title' 이벤트로 알린다.
         this._liveCheck = setInterval(async () => {
           try {
-            await getDetail(this.bid, info.bno);
+            const now = await getDetail(this.bid, info.bno);
+            if (now.title && now.title !== info.title) {
+              info.title = now.title;
+              this.emit('title', now.title);
+            }
           } catch (e) {
             if (!(e instanceof OfflineError) || ws.readyState !== 1) return; // 일시적인 조회 실패는 무시
             this._ended = true;

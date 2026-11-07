@@ -193,6 +193,7 @@ function startChat() {
     chatStatus = { state: s.state, message: s.message, title: s.title || chatStatus.title || '' };
     console.log(`[roulette] ${state.streamer}: ${s.state} - ${s.message}`);
   });
+  chat.on('title', (title) => { chatStatus = { ...chatStatus, title }; });
   chat.on('packet', onPacket);
   keepAwake.acquire('roulette');
 }
