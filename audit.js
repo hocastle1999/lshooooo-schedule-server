@@ -108,6 +108,21 @@ function mount(app) {
     next();
   });
 
+  // 지우기: 한 줄(ts) / 전체. 전체를 지우면 "누가 지웠는지" 한 줄만 새로 남긴다.
+  app.delete('/api/audit', async (req, res) => {
+    await load();
+    log = [];
+    await record(auth.who(req) || '이름 없음', '변경 기록 전체 삭제', '');
+    res.json({ ok: true, total: log.length, list: log.slice(0, 200) });
+  });
+  app.delete('/api/audit/:ts', async (req, res) => {
+    await load();
+    const ts = Number(req.params.ts);
+    log = log.filter((r) => r.ts !== ts);
+    saveSoon();
+    res.json({ ok: true, total: log.length, list: log.slice(0, 200) });
+  });
+
   app.get('/api/audit', async (req, res) => {
     await load();
     const limit = Math.min(MAX, Math.max(1, parseInt(req.query.limit, 10) || 50));

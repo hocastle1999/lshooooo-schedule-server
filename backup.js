@@ -89,6 +89,25 @@ function mount(app) {
     }
   });
 
+  app.delete('/api/backups/:id', async (req, res) => {
+    const who = auth.who(req) || '이름 없음';
+    try {
+      const list = await serial(async () => {
+        const index = (await getState(INDEX_KEY, [])) || [];
+        const b = index.find((x) => x.id === req.params.id);
+        if (!b) throw Object.assign(new Error('백업을 찾을 수 없어요'), { status: 404 });
+        await deleteState('backup:' + b.id);
+        const next = index.filter((x) => x.id !== b.id);
+        await setState(INDEX_KEY, next);
+        audit.record(who, '백업 삭제', new Date(b.at + 9 * 3600 * 1000).toISOString().slice(0, 16).replace('T', ' ')).catch(() => {});
+        return next;
+      });
+      res.json({ ok: true, list });
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
+
   app.get('/api/backups/:id/download', async (req, res) => {
     const b = await getState('backup:' + req.params.id, null);
     if (!b) return res.status(404).json({ error: '백업을 찾을 수 없어요' });

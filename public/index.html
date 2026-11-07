@@ -145,6 +145,9 @@
   .audit-row .a{min-width:0;word-break:break-word;}
   .audit-row .a b{font-weight:700;}
   .audit-row .n{color:var(--text-dim);}
+  .audit-row .a{flex:1;}
+  .audit-x{flex:none;font:inherit;font-size:12px;line-height:1;background:none;border:none;color:var(--text-dim);cursor:pointer;padding:2px 6px;border-radius:6px;}
+  .audit-x:hover{color:var(--danger);background:var(--surface-2);}
   .bk-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12.5px;padding:8px 0;border-bottom:1px solid var(--border);}
   .bk-row .k{font-size:11px;font-weight:700;border-radius:6px;padding:1px 7px;background:var(--surface-2);color:var(--text-dim);}
   .bk-row .c{color:var(--text-dim);font-size:11.5px;flex-basis:100%;}
@@ -497,9 +500,11 @@
       body = !list ? '<div class="empty">불러오는 중…</div>' : !list.length ? '<div class="empty">아직 기록이 없어요.</div>' :
         '<div class="audit-list">'+list.map(function(r){
           return '<div class="audit-row"><span class="t">'+esc(ago2(r.ts))+'</span><span class="w" title="'+esc(r.who)+'">'+esc(r.who)+'</span>'+
-            '<span class="a"><b>'+esc(r.action)+'</b>'+(r.detail?' · '+esc(r.detail):'')+(r.count>1?' <span class="n">('+r.count+'번)</span>':'')+'</span></div>';
+            '<span class="a"><b>'+esc(r.action)+'</b>'+(r.detail?' · '+esc(r.detail):'')+(r.count>1?' <span class="n">('+r.count+'번)</span>':'')+'</span>'+
+            '<button type="button" class="audit-x" data-action="audit-del" data-ts="'+r.ts+'" title="이 기록 지우기" aria-label="이 기록 지우기">✕</button></div>';
         }).join('')+'</div>'+
-        (!ADM.auditAll && ADM.audit.list.length>20 ? '<div style="margin-top:8px;"><button type="button" class="btn" data-action="audit-more">더 보기 ('+ADM.audit.total+')</button></div>' : '');
+        '<div style="margin-top:8px;display:flex;gap:6px;">'+(!ADM.auditAll && ADM.audit.list.length>20 ? '<button type="button" class="btn" data-action="audit-more">더 보기 ('+ADM.audit.total+')</button>' : '')+
+        '<button type="button" class="btn" data-action="audit-clear" style="margin-left:auto;">전체 지우기</button></div>';
     } else {
       var bl = ADM.backups;
       body = '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;"><button type="button" class="btn primary" data-action="backup-now">지금 백업</button>'+
@@ -508,7 +513,7 @@
         bl.map(function(b){
           var c=b.counts||{};
           return '<div class="bk-row"><span class="k">'+esc(BK_KIND[b.kind]||b.kind)+'</span><b>'+esc(ago2(b.at))+'</b>'+(b.by&&b.kind!=='auto'?'<span class="updated" style="margin:0">'+esc(b.by)+'</span>':'')+
-            '<span class="acts"><a class="btn" href="/api/backups/'+encodeURIComponent(b.id)+'/download">내려받기</a><button type="button" class="btn" data-action="backup-restore" data-id="'+esc(b.id)+'">되돌리기</button></span>'+
+            '<span class="acts"><a class="btn" href="/api/backups/'+encodeURIComponent(b.id)+'/download">내려받기</a><button type="button" class="btn" data-action="backup-restore" data-id="'+esc(b.id)+'">되돌리기</button><button type="button" class="btn" data-action="backup-del" data-id="'+esc(b.id)+'">삭제</button></span>'+
             '<span class="c">일정 '+(c.events||0)+' · 날짜 미정 '+(c.unscheduled||0)+' · 메모 '+(c.memos||0)+'페이지 · 주의 시청자 '+(c.watchlist||0)+'명</span></div>';
         }).join(''));
     }
@@ -967,6 +972,9 @@
     if(action==='audit-more'){ ADM.auditAll=true; stashMemoDraft(); render(); return; }
     if(action==='backup-now'){ el.disabled=true; api('POST','/api/backups').then(function(r){ ADM.backups=r.list; toast('지금 상태를 백업했어요'); stashMemoDraft(); render(); }).catch(function(e){ toast('백업 실패: '+e.message); el.disabled=false; }); return; }
     if(action==='backup-restore'){ openRestoreModal(el.getAttribute('data-id')); return; }
+    if(action==='audit-del'){ api('DELETE','/api/audit/'+el.getAttribute('data-ts')).then(function(r){ ADM.audit=r; stashMemoDraft(); render(); }).catch(function(e){ toast('지우기 실패: '+e.message); }); return; }
+    if(action==='audit-clear'){ if(!confirm('변경 기록을 모두 지울까요? 다른 매니저 화면에서도 지워져요.')) return; api('DELETE','/api/audit').then(function(r){ ADM.audit=r; toast('변경 기록을 모두 지웠어요'); stashMemoDraft(); render(); }).catch(function(e){ toast('지우기 실패: '+e.message); }); return; }
+    if(action==='backup-del'){ if(!confirm('이 백업을 삭제할까요? 삭제하면 이 백업으로는 되돌릴 수 없어요.')) return; api('DELETE','/api/backups/'+encodeURIComponent(el.getAttribute('data-id'))).then(function(r){ ADM.backups=r.list; toast('백업을 삭제했어요'); stashMemoDraft(); render(); }).catch(function(e){ toast('삭제 실패: '+e.message); }); return; }
     if(action==='open-rules'){ openRulesModal(false); return; }
     if(action==='edit-rules'){ openRulesModal(true); return; }
     if(action==='toggle-help'){ var hk=el.getAttribute('data-key'); helpOpen[hk]=!helpOpen[hk]; stashMemoDraft(); render(); return; }
