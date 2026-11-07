@@ -32,6 +32,10 @@ roulette.mount(app);
 watch.mount(app);
 broadcasts.mount(app);
 
+// 지금 돌고 있는 버전 (배포 확인용, /deploy-site 가 씀). Render 가 배포한 커밋을 RENDER_GIT_COMMIT 으로 넣어준다.
+const STARTED_AT = Date.now();
+app.get('/api/version', (req, res) => res.json({ commit: process.env.RENDER_GIT_COMMIT || '', startedAt: STARTED_AT }));
+
 // 방송 참여 중 매니저만 따로 (작업실 화면이 5초마다 부른다)
 app.get('/api/managers', (req, res) => res.json(watch.managers()));
 
