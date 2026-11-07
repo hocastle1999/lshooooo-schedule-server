@@ -577,6 +577,13 @@
           wrap.dataset.named = '1';
           var h3 = wrap.querySelector('.hx-head h3');
           h3.firstChild.textContent = nowNick;
+          // 닉네임 없이 열린 경우(참여자 검색에서 #user= 로 들어온 경우)에도 아이디를 옆에 붙인다
+          if (nowNick !== id && !h3.querySelector('.uid')) {
+            var uidEl = document.createElement('span');
+            uidEl.className = 'uid';
+            uidEl.textContent = ' (' + id + ')';
+            h3.insertBefore(uidEl, h3.firstChild.nextSibling);
+          }
           if (d.prevNick) h3.insertAdjacentHTML('beforeend', ' <span class="old-nick" title="바로 직전 닉네임">이전 닉 ' + esc(d.prevNick) + '</span>');
         }
         if (d.inRoom && !inRoomShown) { inRoomShown = true; wrap.querySelector('.hx-head h3').insertAdjacentHTML('beforeend', ' <span class="tag in">참여 중</span>'); }
@@ -737,6 +744,9 @@
   poll();
   if (location.hash === '#today') showPage('2');
   if (location.hash === '#rank') showPage('3');
+  // 참여자 검색 페이지의 '🔍 제재 이력'으로 들어온 경우: #user=아이디 → 바로 제재 이력 창
+  var userHash = location.hash.match(/^#user=(.+)$/);
+  if (userHash) { try { openHist(decodeURIComponent(userHash[1]), '', 'all'); } catch(e) {} }
 })();
 </script>
 </body>

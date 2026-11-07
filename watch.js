@@ -23,6 +23,10 @@ const KEEP_DAYS = 90; // 1·2페이지와 🔍 라벨이 보는 기간
 const STORE_FROM = '2025-01-01';
 const SYNC_EVERY_MS = 15 * 60 * 1000;
 const FLAG_MANAGER = 1 << 8;
+const FLAG_FANCLUB = 1 << 5;
+const FLAG_TOPFAN = 1 << 15; // 열혈팬
+const FLAG_SUBSCRIBER = 1 << 28;
+const flag1 = (flag) => Number(String(flag || '').split('|')[0]) || 0;
 
 let chat = null;
 let chatStatus = { state: 'connecting', message: '연결 준비 중', title: '' };
@@ -298,14 +302,14 @@ function onPacket({ code, parts }) {
     for (let i = 1; i + 2 < parts.length; i += 3) {
       if (parts[i] === '-1' || !parts[i]) continue;
       if (!viewers.has(parts[i])) {
-        viewers.set(parts[i], { id: normId(parts[i]), nick: parts[i + 1], joinedAt: 0 });
+        viewers.set(parts[i], { id: normId(parts[i]), nick: parts[i + 1], joinedAt: 0, flag: flag1(parts[i + 2]) });
         if (parts[i + 1]) nickNow.set(normId(parts[i]), parts[i + 1]);
         if (isManager(parts[i + 2])) managerIds.add(normId(parts[i]));
       }
     }
   } else if (parts[0] === '1' && parts[1]) {
     // 입장: 1 | 아이디 | 닉네임 | flag
-    viewers.set(parts[1], { id: normId(parts[1]), nick: parts[2] || '', joinedAt: Date.now() });
+    viewers.set(parts[1], { id: normId(parts[1]), nick: parts[2] || '', joinedAt: Date.now(), flag: flag1(parts[3]) });
     if (parts[2]) nickNow.set(normId(parts[1]), parts[2]);
     if (isManager(parts[3])) managerIds.add(normId(parts[1])); // 표시가 없이 들어와도 매니저 목록에서 빼지는 않는다
   } else if (parts[0] === '-1' && parts[1]) {
@@ -336,8 +340,9 @@ function presentUsers() {
   const present = new Map(); // id → { nick, joinedAt }
   for (const v of viewers.values()) {
     const prev = present.get(v.id);
-    if (!prev) present.set(v.id, { nick: v.nick, joinedAt: v.joinedAt });
+    if (!prev) present.set(v.id, { nick: v.nick, joinedAt: v.joinedAt, flag: v.flag || 0 });
     else {
+      prev.flag |= v.flag || 0;
       if (prev.joinedAt && (!v.joinedAt || v.joinedAt < prev.joinedAt)) prev.joinedAt = v.joinedAt;
     }
   }
@@ -719,6 +724,51 @@ function mount(app) {
     } catch (e) {
       res.status(502).json({ error: '트래키파이에서 제재 기록을 받지 못했습니다: ' + e.message });
     }
+  });
+
+  // 지금 방송 참여자를 아이디·닉네임으로 찾기 (참여자 검색 페이지).
+  // 정확히 같은 것 → 앞부분이 같은 것 → 들어 있는 것 순서, 최대 100명.
+  app.get('/api/viewers/search', async (req, res) => {
+    await ensureLoaded();
+    const q = String(req.query.q || '').trim().toLowerCase();
+    const live = chatStatus.state === 'live';
+    const present = live ? presentUsers() : new Map();
+    const out = { status: chatStatus, viewerCount: present.size, q, total: 0, list: [] };
+    if (!q) return res.json(out);
+    const since90 = kstString(-KEEP_DAYS);
+    const hits = [];
+    for (const [id, v] of present) {
+      const lid = id.toLowerCase(), lnick = String(v.nick || '').toLowerCase();
+      let score = -1;
+      if (lid === q || lnick === q) score = 0;
+      else if (lid.startsWith(q) || lnick.startsWith(q)) score = 1;
+      else if (lid.includes(q) || lnick.includes(q)) score = 2;
+      if (score < 0) continue;
+      hits.push({ id, v, score });
+    }
+    hits.sort((a, b) => a.score - b.score || (a.v.nick || '').localeCompare(b.v.nick || ''));
+    out.total = hits.length;
+    out.list = hits.slice(0, 100).map(({ id, v }) => {
+      let k90 = 0, m90 = 0, kAll = 0, mAll = 0;
+      for (const it of byUser.get(id) || []) {
+        if (it[2] === 'K') kAll++; else mAll++;
+        if (it[3] >= since90) { if (it[2] === 'K') k90++; else m90++; }
+      }
+      const f = v.flag || 0;
+      return {
+        id,
+        nick: v.nick || id,
+        prevNick: nickInfo(id, v.nick).prev,
+        joinedAt: v.joinedAt,
+        manager: managerIds.has(id),
+        fanclub: Boolean(f & FLAG_FANCLUB),
+        topfan: Boolean(f & FLAG_TOPFAN),
+        subscriber: Boolean(f & FLAG_SUBSCRIBER),
+        sanctions90: { total: k90 + m90, kicks: k90, mutes: m90 },
+        sanctionsAll: { total: kAll + mAll, kicks: kAll, mutes: mAll },
+      };
+    });
+    res.json(out);
   });
 
   app.get('/api/watch', async (req, res) => {

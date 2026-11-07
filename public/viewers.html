@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>참여자 검색</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔎</text></svg>">
+<style>
+  :root{
+    --bg:#F4F5F3;
+    --surface:#FFFFFF;
+    --surface-2:#EBEDEA;
+    --border:#DADDD8;
+    --text:#161A17;
+    --text-dim:#5B655E;
+    --accent:#0E9C8A;
+    --accent-ink:#04352F;
+    --accent-soft:#D9F2EC;
+    --warm:#E08A2C;
+    --warm-soft:#FBE7CE;
+    --danger:#C24545;
+    --danger-soft:#F8E1E1;
+    --sky:#1D6FA5;
+    --sky-soft:#E3F0F8;
+    --ok:#1F9D55;
+    --shadow: 0 1px 2px rgba(20,24,22,.06), 0 8px 24px -12px rgba(20,24,22,.18);
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#12151A; --surface:#191E24; --surface-2:#20262E; --border:#2B333C;
+      --text:#EDF1F4; --text-dim:#8D99A6; --accent:#33D9C2; --accent-ink:#C9FBF3;
+      --accent-soft:#173A36; --warm:#F0A94E; --warm-soft:#3A2A14; --danger:#E17777; --danger-soft:#3A1E1E; --ok:#4ADE80; --sky:#6FB3DE; --sky-soft:#16293A;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 28px -14px rgba(0,0,0,.6);
+      color-scheme: dark;
+    }
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);}
+  body{font-family:"Gothic A1","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;}
+  [hidden]{display:none!important;}
+  #app{max-width:900px;margin:0 auto;padding:20px 16px 48px;display:flex;flex-direction:column;gap:18px;}
+  .top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;}
+  .brand{display:flex;flex-direction:column;gap:4px;}
+  .brand .eyebrow{font-size:11px;letter-spacing:.14em;color:var(--accent);font-weight:700;text-decoration:none;}
+  .brand .eyebrow:hover{text-decoration:underline;}
+  .brand h1{font-weight:800;font-size:clamp(22px,4vw,30px);margin:0;letter-spacing:-.01em;}
+  .brand p{margin:0;color:var(--text-dim);font-size:13px;}
+  .status-pill{display:inline-flex;align-items:center;gap:8px;padding:7px 12px;border-radius:999px;background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow);font-size:12.5px;color:var(--text-dim);max-width:100%;}
+  .status-pill span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--text-dim);flex:none;}
+  .dot.live{background:var(--ok);}
+  .dot.connecting,.dot.reconnecting,.dot.offline{background:var(--warm);}
+  .dot.error{background:var(--danger);}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:16px;min-width:0;}
+  .search{width:100%;padding:13px 15px;border:1px solid var(--border);border-radius:12px;font:inherit;font-size:16px;background:var(--surface-2);color:var(--text);}
+  .search:focus{outline:2px solid var(--accent);outline-offset:-1px;}
+  .stats{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12.5px;color:var(--text-dim);margin-top:10px;}
+  .stats b{color:var(--text);font-variant-numeric:tabular-nums;}
+  .list{display:flex;flex-direction:column;gap:8px;}
+  .row{display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;border:1px solid var(--border);border-radius:12px;background:var(--surface-2);padding:10px 12px;}
+  .name{font-weight:800;font-size:14.5px;}
+  .uid{color:var(--text-dim);}
+  .copy{font:inherit;color:inherit;background:none;border:1px dashed transparent;border-radius:6px;padding:1px 4px;margin:-1px -2px;cursor:copy;}
+  .copy:hover{border-color:var(--accent);color:var(--accent);}
+  .copy.done{border-color:var(--ok);color:var(--ok);}
+  mark{background:var(--warm-soft);color:inherit;border-radius:3px;padding:0 1px;}
+  .tag{font-size:11.5px;font-weight:700;border-radius:6px;padding:2px 7px;background:var(--surface);border:1px solid var(--border);color:var(--text-dim);white-space:nowrap;}
+  .tag.mgr{color:var(--accent);border-color:var(--accent);}
+  .tag.top{color:var(--danger);border-color:var(--danger);}
+  .tag.fan{color:var(--warm);border-color:var(--warm);}
+  .tag.sub{color:var(--sky);border-color:var(--sky);}
+  .tag.k{color:var(--danger);border-color:var(--danger);}
+  .tag.new{color:var(--warm);background:var(--warm-soft);border-color:transparent;}
+  .old-nick{display:inline-block;font-size:12px;font-weight:600;color:var(--sky);background:var(--sky-soft);border-radius:6px;padding:1px 7px;white-space:nowrap;}
+  .mag{margin-left:auto;font:inherit;font-size:12.5px;font-weight:700;text-decoration:none;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:6px 10px;white-space:nowrap;}
+  .mag:hover{border-color:var(--accent);color:var(--accent);}
+  .empty{color:var(--text-dim);font-size:13px;text-align:center;padding:26px 8px;}
+  .hint{font-size:12px;color:var(--text-dim);line-height:1.6;margin-top:10px;}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--text);color:var(--bg);font-size:13px;font-weight:600;padding:9px 16px;border-radius:999px;box-shadow:var(--shadow);z-index:30;pointer-events:none;}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="top">
+    <div class="brand">
+      <a class="eyebrow" href="/">← 매니저 작업실로</a>
+      <h1>참여자 검색</h1>
+      <p>지금 방송에 들어와 있는 시청자를 아이디나 닉네임으로 찾아요</p>
+    </div>
+    <div class="status-pill"><span class="dot" id="statusDot"></span><span id="statusText">불러오는 중…</span></div>
+  </div>
+
+  <section class="card">
+    <input type="search" id="q" class="search" placeholder="아이디 또는 닉네임 (일부만 써도 돼요)" autocomplete="off" spellcheck="false" autofocus>
+    <div class="stats" id="stats"></div>
+  </section>
+
+  <section class="card">
+    <div class="list" id="list"><div class="empty">찾을 아이디나 닉네임을 입력해주세요.</div></div>
+    <div class="hint">
+      정확히 같은 것 → 앞부분이 같은 것 → 들어 있는 것 순서로 최대 100명까지 보여요. 로그인한 시청자만 찾을 수 있어요.
+      닉네임·아이디를 누르면 복사되고, <b>제재 이력</b>을 누르면 제재 이력 창이 새 탭으로 열려요.
+      제재 숫자는 이상호 방송 기준이에요.
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var $ = function(id){ return document.getElementById(id); };
+  var qEl = $('q'), timer = null, seq = 0, lastQ = null;
+  var STATUS_LABEL = { idle:'꺼져 있음', connecting:'연결 중', live:'방송 중', offline:'방송 꺼짐', reconnecting:'재연결 중', error:'오류' };
+
+  function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  function fmt(n){return Number(n||0).toLocaleString('ko-KR');}
+  function hm(ts){var d=new Date(ts);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+  // 찾은 글자를 강조
+  function hl(text, q){
+    var t = String(text||''), i = q ? t.toLowerCase().indexOf(q) : -1;
+    if (i < 0) return esc(t);
+    return esc(t.slice(0,i)) + '<mark>' + esc(t.slice(i, i+q.length)) + '</mark>' + esc(t.slice(i+q.length));
+  }
+  function toast(msg){
+    var old = document.querySelector('.toast'); if (old) old.remove();
+    var t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(function(){ t.remove(); }, 1400);
+  }
+
+  function render(d){
+    var st = d.status || {state:'idle'};
+    $('statusDot').className = 'dot ' + st.state;
+    $('statusText').textContent = (STATUS_LABEL[st.state] || st.state) + (st.state==='live' && st.title ? ' · ' + st.title : '');
+    var live = st.state === 'live';
+    $('stats').innerHTML = live
+      ? '<span>지금 참여자 <b>' + fmt(d.viewerCount) + '</b>명</span>' + (d.q ? '<span>찾은 사람 <b>' + fmt(d.total) + '</b>명' + (d.total > d.list.length ? ' (처음 ' + d.list.length + '명만 표시)' : '') + '</span>' : '')
+      : '<span>방송이 켜져 있을 때만 참여자를 찾을 수 있어요.</span>';
+    if (!d.q) { $('list').innerHTML = '<div class="empty">찾을 아이디나 닉네임을 입력해주세요.</div>'; return; }
+    if (!live) { $('list').innerHTML = '<div class="empty">지금은 방송이 꺼져 있어요.</div>'; return; }
+    if (!d.list.length) { $('list').innerHTML = '<div class="empty">"' + esc(d.q) + '"(이)가 들어간 참여자가 없어요.</div>'; return; }
+    $('list').innerHTML = d.list.map(function(u){
+      var tags = (u.manager ? '<span class="tag mgr">매니저</span>' : '') +
+        (u.topfan ? '<span class="tag top">열혈팬</span>' : '') +
+        (u.subscriber ? '<span class="tag sub">구독</span>' : '') +
+        (u.fanclub && !u.topfan ? '<span class="tag fan">팬클럽</span>' : '') +
+        (u.joinedAt ? '<span class="tag new" title="방송 중간에 들어온 시각">' + hm(u.joinedAt) + ' 입장</span>' : '') +
+        (u.sanctionsAll.total ? '<span class="tag k" title="이상호 방송 제재 (전체 기간) · 최근 90일 ' + u.sanctions90.total + '건">제재 ' + u.sanctionsAll.total + '건 · 강퇴 ' + u.sanctionsAll.kicks + ' · 채금 ' + u.sanctionsAll.mutes + '</span>' : '');
+      return '<div class="row">' +
+        '<button type="button" class="copy name" data-copy="' + esc(u.nick) + '" title="닉네임 복사">' + hl(u.nick, d.q) + '</button>' +
+        (u.id !== u.nick ? '<span class="uid">(<button type="button" class="copy" data-copy="' + esc(u.id) + '" title="아이디 복사">' + hl(u.id, d.q) + '</button>)</span>' : '') +
+        (u.prevNick ? '<span class="old-nick" title="바로 직전 닉네임">이전 닉 ' + esc(u.prevNick) + '</span>' : '') +
+        tags +
+        '<a class="mag" href="/watch.html#user=' + encodeURIComponent(u.id) + '" target="_blank" rel="noopener">🔍 제재 이력</a>' +
+      '</div>';
+    }).join('');
+  }
+
+  async function search(){
+    clearTimeout(timer);
+    var q = qEl.value.trim();
+    var my = ++seq;
+    try {
+      var res = await fetch('/api/viewers/search?q=' + encodeURIComponent(q));
+      var d = await res.json();
+      if (my === seq) { lastQ = q; render(d); }
+    } catch(e){ $('statusText').textContent = '서버와 연결할 수 없음'; $('statusDot').className = 'dot error'; }
+    // 입장·퇴장이 반영되도록 10초마다 같은 검색을 다시
+    timer = setTimeout(search, 10000);
+  }
+
+  qEl.addEventListener('input', function(){
+    clearTimeout(timer);
+    timer = setTimeout(search, 250);
+    try { history.replaceState(null, '', qEl.value.trim() ? '#q=' + encodeURIComponent(qEl.value.trim()) : '#'); } catch(e) {}
+  });
+  $('list').addEventListener('click', function(e){
+    var btn = e.target.closest('[data-copy]'); if (!btn) return;
+    var text = btn.getAttribute('data-copy');
+    (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).catch(function(){
+      var ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+    });
+    btn.classList.add('done'); toast('“' + text + '” 복사했어요');
+  });
+
+  var m = location.hash.match(/^#q=(.+)$/);
+  if (m) { try { qEl.value = decodeURIComponent(m[1]); } catch(e) {} }
+  search();
+})();
+</script>
+</body>
+</html>
