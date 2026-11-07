@@ -1112,7 +1112,7 @@
     try {
       STATE.managers = await api('GET', '/api/managers');
       var row = document.querySelector('.mgr-row');
-      if(row) row.innerHTML = managersHTML();
+      if(row) row.innerHTML = managersHTML() + meHTML(); // 같은 줄의 로그인 표시(이름·로그아웃)도 같이
     } catch(e){}
   }, 5000);
   setInterval(function(){
