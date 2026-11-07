@@ -12,6 +12,7 @@ function pad(n) { return String(n).padStart(2, '0'); }
 
 const DATE_RE = /^(\d{1,2})월\s*(\d{1,2})일\s*\(([일월화수목금토])\)/;
 const TIME_RE = /^(\d{1,2}):(\d{2})\s*(.*)$/;
+const SET_RE = /^(\d{1,2})\s*세트$/;
 const STATUS_RE = /^(종료|예정|진행\s?중|LIVE|라이브|연기|취소)$/i;
 const BUTTON_RE = /^(다시보기|알림\s?받기|승부예측|중계예정|중계\s?보기|하이라이트|티켓|VS|vs|:|：|-)$/;
 const FOOTER_RE = /^네이버 이용약관/;
@@ -35,8 +36,12 @@ function parseTokens(tokens, year) {
     const r = row;
     row = null;
     let status = '';
+    let setNo = null;
     const rest = [];
     for (const t of r.tokens) {
+      // 경기 중에는 상태 자리에 '2세트' 처럼 지금 세트가 나온다 → 진행 중
+      const sm = t.match(SET_RE);
+      if (sm) { setNo = Number(sm[1]); if (!status) status = 'LIVE'; continue; }
       if (!status && STATUS_RE.test(t)) { status = t; continue; }
       if (BUTTON_RE.test(t)) continue;
       rest.push(t);
@@ -63,6 +68,7 @@ function parseTokens(tokens, year) {
       score1: scores.length >= 2 ? scores[0] : null,
       score2: scores.length >= 2 ? scores[1] : null,
       venue: names[2] || '',
+      set: setNo,
     });
   }
 
@@ -84,7 +90,7 @@ function parseTokens(tokens, year) {
       // "03:00종료플레이인 1R" 처럼 한 조각에 붙어 나오는 경우도 처리
       const remain = (tm[3] || '').trim();
       if (remain) {
-        const sm = remain.match(/^(종료|예정|진행\s?중|LIVE|라이브|연기|취소)\s*(.*)$/i);
+        const sm = remain.match(/^(종료|예정|진행\s?중|LIVE|라이브|연기|취소|\d{1,2}\s*세트)\s*(.*)$/i);
         if (sm) { row.tokens.push(sm[1]); if (sm[2]) row.tokens.push(sm[2]); }
         else row.tokens.push(remain);
       }

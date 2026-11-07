@@ -448,7 +448,7 @@
         var fin = m.status==='finished' && hasScore;
         var c1 = fin ? (m.score1>m.score2?'win':(m.score1<m.score2?'lose':'')) : '';
         var c2 = fin ? (m.score2>m.score1?'win':(m.score2<m.score1?'lose':'')) : '';
-        var badgeText = m.status==='finished'?'종료':(m.status==='live'?'LIVE':(m.status==='postponed'?'연기/취소':'예정'));
+        var badgeText = m.status==='finished'?'종료':(m.status==='live'?'LIVE'+(m.set?' · '+m.set+'세트':''):(m.status==='postponed'?'연기/취소':'예정'));
         function nm(t,c){ return '<span class="'+(t==='TBD'?'tbd':c)+'">'+esc(t==='TBD'?'미정':t)+'</span>'; }
         return head+'<div class="wc-match">'+
           '<div class="wc-meta"><b style="color:var(--text);">'+esc(m.time)+'</b><span class="wc-badge '+esc(m.status)+'">'+badgeText+'</span><span>'+esc(m.stage)+'</span></div>'+
