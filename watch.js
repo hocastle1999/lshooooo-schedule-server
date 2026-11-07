@@ -318,6 +318,38 @@ function onPacket({ code, parts }) {
   }
 }
 
+// ---- 주의 시청자 (5페이지) ----
+// 매니저가 등록한 시청자가 채팅을 치면 알림 기록에 남긴다. 화면은 몇 초마다 새 알림만 받아 간다.
+// 목록과 최근 알림은 저장해 둬서 서버가 재시작돼도 남는다. 로그인이 없어서 목록은 매니저 모두가 같이 쓴다.
+const WL_KEY = 'watchlist';
+const WL_ALERTS_KEY = 'watchAlerts';
+const WL_MAX_ALERTS = 300;
+let watchlist = []; // [{ id, nick, memo, addedAt, lastChatAt }]
+let watchSet = new Set();
+let wlAlerts = []; // [{ seq, ts, id, nick, message }] 오래된 → 최신
+let wlSeq = 0;
+let wlSaveTimer = null;
+function wlRebuild() { watchSet = new Set(watchlist.map((w) => w.id)); }
+function wlSaveSoon() {
+  if (wlSaveTimer) return;
+  wlSaveTimer = setTimeout(async () => {
+    wlSaveTimer = null;
+    try {
+      await setState(WL_KEY, watchlist);
+      await setState(WL_ALERTS_KEY, { seq: wlSeq, alerts: wlAlerts.slice(-WL_MAX_ALERTS) });
+    } catch (e) { console.error('[watch] 주의 시청자 저장 실패:', e.message); }
+  }, 3000);
+}
+function onChat(c) {
+  if (c.userId && c.nickname) nickNow.set(c.userId, c.nickname);
+  if (!watchSet.has(c.userId)) return;
+  const w = watchlist.find((x) => x.id === c.userId);
+  if (w) { w.lastChatAt = c.ts; if (c.nickname) w.nick = c.nickname; }
+  wlAlerts.push({ seq: ++wlSeq, ts: c.ts, id: c.userId, nick: c.nickname || c.userId, message: String(c.message || '').slice(0, 300) });
+  if (wlAlerts.length > WL_MAX_ALERTS) wlAlerts = wlAlerts.slice(-WL_MAX_ALERTS);
+  wlSaveSoon();
+}
+
 function startChat() {
   viewers.clear();
   chat = new SoopChat(STREAMER).start();
@@ -329,6 +361,7 @@ function startChat() {
     console.log(`[watch] ${STREAMER}: ${s.state} - ${s.message}`);
   });
   chat.on('title', (title) => { chatStatus = { ...chatStatus, title }; });
+  chat.on('chat', onChat);
   chat.on('packet', onPacket);
   keepAwake.acquire('watch');
   setInterval(resyncManagers, RESYNC_MS);
@@ -409,6 +442,10 @@ function managers() {
 function ensureLoaded() {
   if (!loading) {
     loading = (async () => {
+      const wl = await getState(WL_KEY, []);
+      if (Array.isArray(wl)) { watchlist = wl; wlRebuild(); }
+      const wa = await getState(WL_ALERTS_KEY, null);
+      if (wa && Array.isArray(wa.alerts)) { wlAlerts = wa.alerts; wlSeq = wa.seq || 0; }
       const saved = await getState(SANCTIONS_KEY, null);
       if (saved && (typeof saved.rows === 'string' || Array.isArray(saved.items))) {
         sanctions = {
@@ -725,6 +762,67 @@ function mount(app) {
     } catch (e) {
       res.status(502).json({ error: '트래키파이에서 제재 기록을 받지 못했습니다: ' + e.message });
     }
+  });
+
+  // ---- 주의 시청자 API ----
+  function wlView() {
+    const present = chatStatus.state === 'live' ? presentUsers() : new Map();
+    return watchlist.map((w) => {
+      const ni = nickInfo(w.id, w.nick);
+      return { ...w, nick: ni.nick, prevNick: ni.prev, inRoom: present.has(w.id) };
+    });
+  }
+  app.get('/api/watchlist', async (req, res) => {
+    await ensureLoaded();
+    res.json({ status: chatStatus, list: wlView(), seq: wlSeq, alerts: wlAlerts.slice(-100).reverse() });
+  });
+  // 화면이 몇 초마다 부른다: since 다음 알림만 (최신순)
+  app.get('/api/watchlist/alerts', async (req, res) => {
+    await ensureLoaded();
+    const since = parseInt(req.query.since, 10) || 0;
+    res.json({ seq: wlSeq, alerts: wlAlerts.filter((a) => a.seq > since).reverse() });
+  });
+  // 추가: 아이디 또는 닉네임. 닉네임이면 지금 참여자·제재 기록에서 아이디를 찾는다.
+  app.post('/api/watchlist', async (req, res) => {
+    await ensureLoaded();
+    const q = String((req.body || {}).q || '').trim();
+    const memo = String((req.body || {}).memo || '').trim().slice(0, 100);
+    if (!q) return res.status(400).json({ error: '아이디나 닉네임을 입력해주세요' });
+    let id = '';
+    const present = presentUsers();
+    if (present.has(normId(q)) || byUser.has(normId(q))) id = normId(q);
+    if (!id) {
+      const byNick = [...present].filter(([, v]) => v.nick === q).map(([pid]) => pid);
+      if (byNick.length === 1) id = byNick[0];
+      else if (byNick.length > 1) return res.status(409).json({ error: '같은 닉네임이 여러 명이에요. 아이디로 추가해주세요: ' + byNick.join(', ') });
+    }
+    if (!id) {
+      for (const [uid, items] of byUser) if (items[0] && items[0][1] === q) { id = uid; break; }
+    }
+    if (!id && /^[A-Za-z0-9_]{3,40}$/.test(q)) id = q; // 아직 본 적 없는 아이디도 그대로 추가
+    if (!id) return res.status(404).json({ error: '"' + q + '"인 참여자를 찾지 못했어요. 아이디로 추가해주세요.' });
+    const nick = (present.get(id) || {}).nick || nickInfo(id).nick;
+    const old = watchlist.find((w) => w.id === id);
+    if (old) { if (memo) old.memo = memo; }
+    else watchlist.unshift({ id, nick: nick !== id ? nick : '', memo, addedAt: Date.now(), lastChatAt: 0 });
+    wlRebuild();
+    wlSaveSoon();
+    res.json({ ok: true, id, added: !old, list: wlView() });
+  });
+  app.post('/api/watchlist/:id', async (req, res) => {
+    await ensureLoaded();
+    const w = watchlist.find((x) => x.id === req.params.id);
+    if (!w) return res.status(404).json({ error: '목록에 없는 아이디예요' });
+    w.memo = String((req.body || {}).memo || '').trim().slice(0, 100);
+    wlSaveSoon();
+    res.json({ ok: true, list: wlView() });
+  });
+  app.delete('/api/watchlist/:id', async (req, res) => {
+    await ensureLoaded();
+    watchlist = watchlist.filter((x) => x.id !== req.params.id);
+    wlRebuild();
+    wlSaveSoon();
+    res.json({ ok: true, list: wlView() });
   });
 
   // 지금 방송 참여자를 아이디·닉네임으로 찾기 (참여자 검색 페이지).

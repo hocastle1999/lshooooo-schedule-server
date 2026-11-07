@@ -154,6 +154,27 @@
   .vrow .vname{font-weight:800;font-size:14.5px;}
   .vrow .mag{margin-left:auto;}
   .vempty{color:var(--text-dim);font-size:13px;text-align:center;padding:26px 8px;}
+  .page-tab .cnt{display:inline-block;min-width:18px;height:18px;line-height:18px;border-radius:9px;background:var(--danger);color:#fff;font-size:11px;margin-left:6px;padding:0 5px;text-align:center;}
+  .wl-add{display:flex;gap:8px;flex-wrap:wrap;}
+  .wl-add input{flex:1 1 180px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;font:inherit;font-size:14px;background:var(--surface-2);color:var(--text);}
+  .wl-add input:focus{outline:2px solid var(--accent);outline-offset:-1px;}
+  .wl-opts{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;}
+  .wl-opts .btn.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-ink);}
+  .wl-row{display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;border:1px solid var(--border);border-radius:12px;background:var(--surface-2);padding:10px 12px;}
+  .wl-row .vname{font-weight:800;font-size:14.5px;}
+  .wl-memo{font:inherit;font-size:12.5px;color:var(--text-dim);background:none;border:1px dashed var(--border);border-radius:7px;padding:3px 8px;cursor:pointer;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .wl-memo:hover{border-color:var(--accent);color:var(--accent);}
+  .wl-row .right{margin-left:auto;display:flex;gap:6px;align-items:center;}
+  .wl-del{font:inherit;font-size:12px;border:1px solid var(--border);background:var(--surface);color:var(--text-dim);border-radius:8px;padding:5px 9px;cursor:pointer;}
+  .wl-del:hover{border-color:var(--danger);color:var(--danger);}
+  .feed{display:flex;flex-direction:column;gap:6px;}
+  .feed-row{display:flex;gap:10px;align-items:baseline;border-bottom:1px solid var(--border);padding:7px 2px;font-size:13.5px;}
+  .feed-row .t{font-family:ui-monospace,Consolas,monospace;font-size:11.5px;color:var(--text-dim);flex:none;}
+  .feed-row .who{font-weight:800;flex:none;}
+  .feed-row .msg{word-break:break-word;}
+  .feed-row.fresh{background:var(--warm-soft);border-radius:8px;}
+  .hx-watch{font:inherit;font-size:12px;font-weight:700;border:1px solid var(--border);background:var(--surface-2);color:var(--text);border-radius:8px;padding:4px 9px;cursor:pointer;}
+  .hx-watch.on{border-color:var(--warm);color:var(--warm);background:var(--warm-soft);}
   mark{background:var(--warm-soft);color:inherit;border-radius:3px;padding:0 1px;}
   .sx-time{margin-left:auto;font-size:12px;color:var(--text-dim);}
   .sx-one{margin-top:10px;border-top:1px dashed var(--border);padding-top:9px;}
@@ -196,6 +217,7 @@
     <button type="button" class="page-tab" data-page="2"><span class="n">2</span>제재내역</button>
     <button type="button" class="page-tab" data-page="3"><span class="n">3</span>제재 순위</button>
     <button type="button" class="page-tab" data-page="4"><span class="n">4</span>참여자 검색</button>
+    <button type="button" class="page-tab" data-page="5"><span class="n">5</span>주의 시청자<span class="cnt" id="wlCnt" hidden></span></button>
   </div>
 
   <div id="page1">
@@ -315,6 +337,34 @@
         지금 방송에 들어와 있는 시청자를 찾아요 (로그인한 시청자만). 정확히 같은 것 → 앞부분이 같은 것 → 들어 있는 것 순서로 최대 100명까지 보여요.
         닉네임·아이디를 누르면 복사되고, 🔍를 누르면 제재 이력이 보여요. 제재 숫자는 이상호 방송 기준이에요.
       </div>
+    </section>
+  </div>
+
+  <div id="page5" hidden>
+    <section class="card">
+      <h2>주의 시청자 추가</h2>
+      <form class="wl-add" id="wlForm">
+        <input type="text" name="q" placeholder="아이디 또는 닉네임" autocomplete="off" spellcheck="false" required>
+        <input type="text" name="memo" placeholder="메모 (선택, 예: 어제 패드립)" autocomplete="off" maxlength="100">
+        <button type="submit" class="btn">추가</button>
+      </form>
+      <div class="wl-opts">
+        <button type="button" class="btn" id="wlNotify">🔔 브라우저 알림 켜기</button>
+        <button type="button" class="btn" id="wlSound">🔈 소리 켜기</button>
+        <span class="hint" style="margin:0">이 페이지(1~5 어느 탭이든)를 열어 두면 주의 시청자가 채팅할 때 알려줘요.</span>
+      </div>
+      <div class="error" id="wlError" hidden></div>
+    </section>
+
+    <section class="card">
+      <h2>주의 시청자 <span class="badge" id="wlBadge">0명</span></h2>
+      <div class="vlist" id="wlList"><div class="vempty">불러오는 중…</div></div>
+      <div class="hint">목록은 매니저 모두가 같이 써요. 메모를 누르면 고칠 수 있고, 🔍로 제재 이력을 볼 수 있어요. 🔍 창의 ⭐ 버튼으로도 추가·해제할 수 있어요.</div>
+    </section>
+
+    <section class="card">
+      <h2>채팅 알림 <span class="badge" id="feedBadge">최근 100개</span></h2>
+      <div class="feed" id="wlFeed"><div class="vempty">아직 알림이 없어요.</div></div>
     </section>
   </div>
 </div>
@@ -448,7 +498,8 @@
     '1': '지금 방송에 들어와 있는 참여자 중 최근 제재(강퇴·채금)를 많이 받은 사람',
     '2': '그날 강퇴·채금당한 시청자와 제재 직전 채팅',
     '3': '이상호 방송에서 제재를 많이 받은 순위',
-    '4': '지금 방송에 들어와 있는 시청자를 아이디나 닉네임으로 찾기'
+    '4': '지금 방송에 들어와 있는 시청자를 아이디나 닉네임으로 찾기',
+    '5': '등록해 둔 시청자가 채팅을 치면 알려줘요'
   };
   var currentPage = '1';
   function showPage(n){
@@ -458,11 +509,13 @@
     $('page2').hidden = n !== '2';
     $('page3').hidden = n !== '3';
     $('page4').hidden = n !== '4';
+    $('page5').hidden = n !== '5';
     document.querySelector('.brand p').textContent = PAGE_DESC[n];
-    try { history.replaceState(null, '', n === '2' ? '#today' : n === '3' ? '#rank' : n === '4' ? (vqEl.value.trim() ? '#q=' + encodeURIComponent(vqEl.value.trim()) : '#search') : '#'); } catch(e) {}
+    try { history.replaceState(null, '', n === '2' ? '#today' : n === '3' ? '#rank' : n === '4' ? (vqEl.value.trim() ? '#q=' + encodeURIComponent(vqEl.value.trim()) : '#search') : n === '5' ? '#watch' : '#'); } catch(e) {}
     if (n === '2') loadDay();
     if (n === '3') loadRank();
     if (n === '4') { vSearch(); setTimeout(function(){ vqEl.focus(); }, 0); }
+    if (n === '5') { wlUnread = 0; paintUnread(); loadWatchlist(); }
   }
   document.querySelector('.pages').addEventListener('click', function(e){
     var b = e.target.closest('[data-page]'); if (b) showPage(b.dataset.page);
@@ -619,6 +672,12 @@
           if (d.prevNick) h3.insertAdjacentHTML('beforeend', ' <span class="old-nick" title="바로 직전 닉네임">이전 닉 ' + esc(d.prevNick) + '</span>');
         }
         if (d.inRoom && !inRoomShown) { inRoomShown = true; wrap.querySelector('.hx-head h3').insertAdjacentHTML('beforeend', ' <span class="tag in">참여 중</span>'); }
+        if (!wrap.querySelector('.hx-watch')) {
+          var on = wlIds.has(id);
+          wrap.querySelector('.hx-close').insertAdjacentHTML('beforebegin', '<button type="button" class="hx-watch' + (on ? ' on' : '') + '" data-wl-toggle="' + esc(id) + '">' + (on ? '⭐ 주의 시청자 해제' : '☆ 주의 시청자 추가') + '</button>');
+          wrap.querySelector('.hx-close').style.marginLeft = '0';
+          wrap.querySelector('.hx-watch').style.marginLeft = 'auto';
+        }
         var cards, extra = '', empty;
         if (mode === 'here') {
           var c = d.channel || { total: d.total, kicks: 0, mutes: 0 };
@@ -828,12 +887,155 @@
     copyText(text); btn.classList.add('done'); toast('“' + text + '” 복사했어요');
   });
 
+  // ---- 5페이지: 주의 시청자 ----
+  // 알림은 어느 탭에 있든 4초마다 새 것만 받아 온다. 5페이지가 아니면 탭에 안 읽은 개수를 띄운다.
+  var wlIds = new Set(), wlSeqSeen = null, wlUnread = 0, wlTimer = null, wlFeed = [];
+  var wlSoundOn = false;
+  try { wlSoundOn = localStorage.getItem('wl-sound') === '1'; } catch(e) {}
+  function paintUnread(){ var c = $('wlCnt'); c.hidden = !wlUnread; c.textContent = wlUnread > 99 ? '99+' : wlUnread; }
+  function paintOpts(){
+    $('wlSound').textContent = wlSoundOn ? '🔊 소리 켜짐' : '🔈 소리 켜기';
+    $('wlSound').classList.toggle('on', wlSoundOn);
+    var perm = ('Notification' in window) ? Notification.permission : 'unsupported';
+    $('wlNotify').textContent = perm === 'granted' ? '🔔 브라우저 알림 켜짐' : perm === 'denied' ? '🔕 알림이 막혀 있어요 (브라우저 설정)' : perm === 'unsupported' ? '🔕 이 브라우저는 알림을 지원하지 않아요' : '🔔 브라우저 알림 켜기';
+    $('wlNotify').classList.toggle('on', perm === 'granted');
+  }
+  function beep(){
+    try {
+      var ctx = new (window.AudioContext || window.webkitAudioContext)(), o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'sine'; o.frequency.value = 880; g.gain.setValueAtTime(0.15, ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+      o.connect(g); g.connect(ctx.destination); o.start(); o.stop(ctx.currentTime + 0.35);
+    } catch(e) {}
+  }
+  function feedHTML(a, fresh){
+    var d = new Date(a.ts);
+    return '<div class="feed-row' + (fresh ? ' fresh' : '') + '"><span class="t">' + pad(d.getMonth()+1) + '/' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()) + '</span>' +
+      '<span class="who">' + esc(a.nick) + ' <span class="uid">(' + esc(a.id) + ')</span></span><span class="msg">' + esc(a.message) + '</span></div>';
+  }
+  function renderFeed(freshFrom){
+    $('wlFeed').innerHTML = wlFeed.length ? wlFeed.slice(0, 100).map(function(a){ return feedHTML(a, freshFrom && a.seq > freshFrom); }).join('') : '<div class="vempty">아직 알림이 없어요.</div>';
+  }
+  function renderWatchlist(list){
+    wlIds = new Set(list.map(function(w){ return w.id; }));
+    $('wlBadge').textContent = list.length + '명';
+    $('wlList').innerHTML = list.length ? list.map(function(w){
+      var nick = w.nick || w.id;
+      return '<div class="wl-row">' +
+        '<button type="button" class="copy vname" data-copy="' + esc(nick) + '" title="닉네임 복사">' + esc(nick) + '</button>' +
+        (w.id !== nick ? '<span class="uid">(<button type="button" class="copy" data-copy="' + esc(w.id) + '" title="아이디 복사">' + esc(w.id) + '</button>)</span>' : '') +
+        oldNickHTML({ oldNick: w.prevNick }) +
+        (w.inRoom ? '<span class="tag in">참여 중</span>' : '') +
+        (w.lastChatAt ? '<span class="tag" title="마지막으로 채팅 친 시각">마지막 채팅 ' + ago(w.lastChatAt) + '</span>' : '') +
+        '<button type="button" class="wl-memo" data-wl-memo="' + esc(w.id) + '" title="메모 고치기">' + (w.memo ? '📝 ' + esc(w.memo) : '+ 메모') + '</button>' +
+        '<span class="right">' + magBtn(w.id, nick, 'all') + '<button type="button" class="wl-del" data-wl-del="' + esc(w.id) + '">빼기</button></span>' +
+      '</div>';
+    }).join('') : '<div class="vempty">아직 등록한 시청자가 없어요. 위에서 아이디나 닉네임으로 추가해주세요.</div>';
+  }
+  async function loadWatchlist(){
+    try {
+      var d = await api('/api/watchlist');
+      renderWatchlist(d.list);
+      wlFeed = d.alerts;
+      if (wlSeqSeen === null) wlSeqSeen = d.seq;
+      renderFeed();
+    } catch(e) { $('wlError').textContent = '목록을 불러오지 못했어요: ' + e.message; $('wlError').hidden = false; }
+  }
+  async function pollAlerts(){
+    clearTimeout(wlTimer);
+    try {
+      if (wlSeqSeen === null) { var first = await api('/api/watchlist'); wlSeqSeen = first.seq; wlIds = new Set(first.list.map(function(w){ return w.id; })); }
+      else {
+        var d = await api('/api/watchlist/alerts?since=' + wlSeqSeen);
+        if (d.alerts.length) {
+          var before = wlSeqSeen;
+          wlSeqSeen = d.seq;
+          wlFeed = d.alerts.concat(wlFeed).slice(0, 100);
+          if (currentPage === '5') { renderFeed(before); loadWatchlist(); }
+          else { wlUnread += d.alerts.length; paintUnread(); }
+          var a = d.alerts[0];
+          toast('⚠️ ' + a.nick + ': ' + a.message.slice(0, 40));
+          if (wlSoundOn) beep();
+          if ('Notification' in window && Notification.permission === 'granted' && document.visibilityState !== 'visible') {
+            d.alerts.slice(0, 3).forEach(function(x){ try { new Notification('주의 시청자 채팅 · ' + x.nick, { body: x.message, tag: 'wl-' + x.seq }); } catch(e) {} });
+          }
+        } else if (d.seq < wlSeqSeen) wlSeqSeen = d.seq; // 서버 기록이 처음부터 다시 시작된 경우
+      }
+    } catch(e) {}
+    wlTimer = setTimeout(pollAlerts, 4000);
+  }
+  // api() 가 이 페이지에는 없어서 간단히
+  async function api(path, opts){
+    var res = await fetch(path, opts);
+    var d = await res.json().catch(function(){ return {}; });
+    if (!res.ok) throw new Error(d.error || ('HTTP ' + res.status));
+    return d;
+  }
+  async function wlPost(path, body, method){
+    return api(path, { method: method || 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+  }
+  async function wlToggle(id, add){
+    if (add) await wlPost('/api/watchlist', { q: id });
+    else await wlPost('/api/watchlist/' + encodeURIComponent(id), {}, 'DELETE');
+    var d = await api('/api/watchlist');
+    renderWatchlist(d.list);
+    toast(add ? '⭐ 주의 시청자로 추가했어요' : '주의 시청자에서 뺐어요');
+  }
+
+  $('wlForm').addEventListener('submit', async function(e){
+    e.preventDefault();
+    var f = new FormData(this);
+    $('wlError').hidden = true;
+    try {
+      var r = await wlPost('/api/watchlist', { q: f.get('q'), memo: f.get('memo') });
+      renderWatchlist(r.list);
+      this.reset();
+      toast(r.added ? '⭐ ' + r.id + ' 추가했어요' : r.id + ' 메모를 바꿨어요');
+    } catch(err) { $('wlError').textContent = err.message; $('wlError').hidden = false; }
+  });
+  $('wlList').addEventListener('click', async function(e){
+    var c = e.target.closest('[data-copy]');
+    if (c) { var t = c.getAttribute('data-copy'); copyText(t); c.classList.add('done'); toast('“' + t + '” 복사했어요'); return; }
+    var del = e.target.closest('[data-wl-del]');
+    if (del) { if (confirm(del.getAttribute('data-wl-del') + ' 를 주의 시청자에서 뺄까요?')) wlToggle(del.getAttribute('data-wl-del'), false); return; }
+    var m = e.target.closest('[data-wl-memo]');
+    if (m) {
+      var id = m.getAttribute('data-wl-memo');
+      var cur = m.textContent.indexOf('📝 ') === 0 ? m.textContent.slice(3) : '';
+      var memo = prompt(id + ' 메모', cur);
+      if (memo === null) return;
+      try { var r = await wlPost('/api/watchlist/' + encodeURIComponent(id), { memo: memo }); renderWatchlist(r.list); } catch(err) { toast('메모 저장 실패: ' + err.message); }
+    }
+  });
+  $('wlSound').addEventListener('click', function(){
+    wlSoundOn = !wlSoundOn;
+    try { localStorage.setItem('wl-sound', wlSoundOn ? '1' : '0'); } catch(e) {}
+    paintOpts();
+    if (wlSoundOn) beep();
+  });
+  $('wlNotify').addEventListener('click', function(){
+    if (!('Notification' in window) || Notification.permission !== 'default') return;
+    Notification.requestPermission().then(paintOpts);
+  });
+  // 🔍 창의 ⭐ 버튼
+  document.addEventListener('click', async function(e){
+    var b = e.target.closest('[data-wl-toggle]'); if (!b) return;
+    var id = b.getAttribute('data-wl-toggle'), add = !wlIds.has(id);
+    try {
+      await wlToggle(id, add);
+      b.classList.toggle('on', add);
+      b.textContent = add ? '⭐ 주의 시청자 해제' : '☆ 주의 시청자 추가';
+    } catch(err) { toast('실패: ' + err.message); }
+  });
+  paintOpts();
+  pollAlerts();
+
   poll();
   if (location.hash === '#today') showPage('2');
   if (location.hash === '#rank') showPage('3');
   var qHash = location.hash.match(/^#q=(.+)$/);
   if (qHash) { try { vqEl.value = decodeURIComponent(qHash[1]); } catch(e) {} }
   if (location.hash === '#search' || qHash) showPage('4');
+  if (location.hash === '#watch') showPage('5');
   // 참여자 검색 페이지의 '🔍 제재 이력'으로 들어온 경우: #user=아이디 → 바로 제재 이력 창
   var userHash = location.hash.match(/^#user=(.+)$/);
   if (userHash) { try { openHist(decodeURIComponent(userHash[1]), '', 'all'); } catch(e) {} }
