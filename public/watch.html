@@ -142,6 +142,19 @@
   .tag.k{color:var(--danger);border-color:var(--danger);}
   .tag.m{color:var(--warm);border-color:var(--warm);}
   .tag.in{color:var(--ok);border-color:var(--ok);}
+  .tag.mgr{color:var(--accent);border-color:var(--accent);}
+  .tag.top{color:var(--danger);border-color:var(--danger);}
+  .tag.fan{color:var(--warm);border-color:var(--warm);}
+  .tag.sub{color:var(--sky);border-color:var(--sky);}
+  .tag.newin{color:var(--warm);background:var(--warm-soft);border-color:transparent;}
+  .vsearch{width:100%;padding:13px 15px;border:1px solid var(--border);border-radius:12px;font:inherit;font-size:16px;background:var(--surface-2);color:var(--text);}
+  .vsearch:focus{outline:2px solid var(--accent);outline-offset:-1px;}
+  .vlist{display:flex;flex-direction:column;gap:8px;}
+  .vrow{display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;border:1px solid var(--border);border-radius:12px;background:var(--surface-2);padding:10px 12px;}
+  .vrow .vname{font-weight:800;font-size:14.5px;}
+  .vrow .mag{margin-left:auto;}
+  .vempty{color:var(--text-dim);font-size:13px;text-align:center;padding:26px 8px;}
+  mark{background:var(--warm-soft);color:inherit;border-radius:3px;padding:0 1px;}
   .sx-time{margin-left:auto;font-size:12px;color:var(--text-dim);}
   .sx-one{margin-top:10px;border-top:1px dashed var(--border);padding-top:9px;}
   .sx-one-head{font-size:12.5px;font-weight:700;margin-bottom:6px;}
@@ -182,6 +195,7 @@
     <button type="button" class="page-tab on" data-page="1"><span class="n">1</span>제재 이력 참여자</button>
     <button type="button" class="page-tab" data-page="2"><span class="n">2</span>제재내역</button>
     <button type="button" class="page-tab" data-page="3"><span class="n">3</span>제재 순위</button>
+    <button type="button" class="page-tab" data-page="4"><span class="n">4</span>참여자 검색</button>
   </div>
 
   <div id="page1">
@@ -285,6 +299,21 @@
         <b>전체 방송</b>: 이 기간에 이상호 방송에서 많이 제재받은 상위 300명을, 다른 방송까지 합친 제재 수로 다시 줄 세운 순위예요. 사람마다 트래키파이에 물어봐야 해서 이 화면을 보고 있는 동안 조금씩 채워져요.
         상위 200명까지 보여요.
         표 머리의 전체·강퇴·채금을 눌러도 정렬이 바뀌어요. <span class="tag in">참여 중</span>은 지금 방송에 들어와 있는 사람이고, 🔍를 누르면 그 사람의 제재 이력이 보여요.
+      </div>
+    </section>
+  </div>
+
+  <div id="page4" hidden>
+    <section class="card">
+      <input type="search" id="vq" class="vsearch" placeholder="아이디 또는 닉네임 (일부만 써도 돼요)" autocomplete="off" spellcheck="false">
+      <div class="stats" id="vStats"></div>
+    </section>
+
+    <section class="card">
+      <div class="vlist" id="vList"><div class="vempty">찾을 아이디나 닉네임을 입력해주세요.</div></div>
+      <div class="hint">
+        지금 방송에 들어와 있는 시청자를 찾아요 (로그인한 시청자만). 정확히 같은 것 → 앞부분이 같은 것 → 들어 있는 것 순서로 최대 100명까지 보여요.
+        닉네임·아이디를 누르면 복사되고, 🔍를 누르면 제재 이력이 보여요. 제재 숫자는 이상호 방송 기준이에요.
       </div>
     </section>
   </div>
@@ -418,7 +447,8 @@
   var PAGE_DESC = {
     '1': '지금 방송에 들어와 있는 참여자 중 최근 제재(강퇴·채금)를 많이 받은 사람',
     '2': '그날 강퇴·채금당한 시청자와 제재 직전 채팅',
-    '3': '이상호 방송에서 제재를 많이 받은 순위'
+    '3': '이상호 방송에서 제재를 많이 받은 순위',
+    '4': '지금 방송에 들어와 있는 시청자를 아이디나 닉네임으로 찾기'
   };
   var currentPage = '1';
   function showPage(n){
@@ -427,10 +457,12 @@
     $('page1').hidden = n !== '1';
     $('page2').hidden = n !== '2';
     $('page3').hidden = n !== '3';
+    $('page4').hidden = n !== '4';
     document.querySelector('.brand p').textContent = PAGE_DESC[n];
-    try { history.replaceState(null, '', n === '2' ? '#today' : n === '3' ? '#rank' : '#'); } catch(e) {}
+    try { history.replaceState(null, '', n === '2' ? '#today' : n === '3' ? '#rank' : n === '4' ? (vqEl.value.trim() ? '#q=' + encodeURIComponent(vqEl.value.trim()) : '#search') : '#'); } catch(e) {}
     if (n === '2') loadDay();
     if (n === '3') loadRank();
+    if (n === '4') { vSearch(); setTimeout(function(){ vqEl.focus(); }, 0); }
   }
   document.querySelector('.pages').addEventListener('click', function(e){
     var b = e.target.closest('[data-page]'); if (b) showPage(b.dataset.page);
@@ -676,6 +708,7 @@
     rankOpt[k] = v;
     try { localStorage.setItem('rank-opt', JSON.stringify(rankOpt)); } catch(e) {}
     paintRankOpt();
+
     loadRank();
   }
   async function loadRank(){
@@ -741,9 +774,66 @@
   });
   paintRankOpt();
 
+  // ---- 4페이지: 참여자 검색 ----
+  var vqEl = $('vq'), vTimer = null, vSeq = 0;
+  // 찾은 글자를 강조
+  function hl(text, q){
+    var t = String(text||''), i = q ? t.toLowerCase().indexOf(q) : -1;
+    if (i < 0) return esc(t);
+    return esc(t.slice(0,i)) + '<mark>' + esc(t.slice(i, i+q.length)) + '</mark>' + esc(t.slice(i+q.length));
+  }
+  function renderSearch(d){
+    var st = d.status || {state:'idle'}, live = st.state === 'live';
+    $('vStats').innerHTML = live
+      ? '<span>지금 참여자 <b>' + fmt(d.viewerCount) + '</b>명</span>' + (d.q ? '<span>찾은 사람 <b>' + fmt(d.total) + '</b>명' + (d.total > d.list.length ? ' (처음 ' + d.list.length + '명만 표시)' : '') + '</span>' : '')
+      : '<span>방송이 켜져 있을 때만 참여자를 찾을 수 있어요.</span>';
+    var box = $('vList');
+    if (!d.q) { box.innerHTML = '<div class="vempty">찾을 아이디나 닉네임을 입력해주세요.</div>'; return; }
+    if (!live) { box.innerHTML = '<div class="vempty">지금은 방송이 꺼져 있어요.</div>'; return; }
+    if (!d.list.length) { box.innerHTML = '<div class="vempty">"' + esc(d.q) + '"(이)가 들어간 참여자가 없어요.</div>'; return; }
+    box.innerHTML = d.list.map(function(u){
+      var tags = (u.manager ? '<span class="tag mgr">매니저</span>' : '') +
+        (u.topfan ? '<span class="tag top">열혈팬</span>' : '') +
+        (u.subscriber ? '<span class="tag sub">구독</span>' : '') +
+        (u.fanclub && !u.topfan ? '<span class="tag fan">팬클럽</span>' : '') +
+        (u.joinedAt ? '<span class="tag newin" title="방송 중간에 들어온 시각">' + hm(u.joinedAt) + ' 입장</span>' : '') +
+        (u.sanctionsAll.total ? '<span class="tag k" title="이상호 방송 제재 (전체 기간) · 최근 90일 ' + u.sanctions90.total + '건">제재 ' + u.sanctionsAll.total + '건 · 강퇴 ' + u.sanctionsAll.kicks + ' · 채금 ' + u.sanctionsAll.mutes + '</span>' : '');
+      return '<div class="vrow">' +
+        '<button type="button" class="copy vname" data-copy="' + esc(u.nick) + '" title="닉네임 복사">' + hl(u.nick, d.q) + '</button>' +
+        (u.id !== u.nick ? '<span class="uid">(<button type="button" class="copy" data-copy="' + esc(u.id) + '" title="아이디 복사">' + hl(u.id, d.q) + '</button>)</span>' : '') +
+        oldNickHTML({ oldNick: u.prevNick }) + tags + magBtn(u.id, u.nick, 'all') +
+      '</div>';
+    }).join('');
+  }
+  async function vSearch(){
+    clearTimeout(vTimer);
+    if (currentPage !== '4') return;
+    var q = vqEl.value.trim(), my = ++vSeq;
+    try {
+      var res = await fetch('/api/viewers/search?q=' + encodeURIComponent(q));
+      var d = await res.json();
+      if (my === vSeq) renderSearch(d);
+    } catch(e) { $('vStats').textContent = '서버와 연결할 수 없어요.'; }
+    vTimer = setTimeout(vSearch, 10000); // 입장·퇴장이 반영되도록 같은 검색을 다시
+  }
+  vqEl.addEventListener('input', function(){
+    clearTimeout(vTimer);
+    vTimer = setTimeout(vSearch, 250);
+    var q = vqEl.value.trim();
+    try { history.replaceState(null, '', q ? '#q=' + encodeURIComponent(q) : '#search'); } catch(e) {}
+  });
+  $('vList').addEventListener('click', function(e){
+    var btn = e.target.closest('[data-copy]'); if (!btn) return;
+    var text = btn.getAttribute('data-copy');
+    copyText(text); btn.classList.add('done'); toast('“' + text + '” 복사했어요');
+  });
+
   poll();
   if (location.hash === '#today') showPage('2');
   if (location.hash === '#rank') showPage('3');
+  var qHash = location.hash.match(/^#q=(.+)$/);
+  if (qHash) { try { vqEl.value = decodeURIComponent(qHash[1]); } catch(e) {} }
+  if (location.hash === '#search' || qHash) showPage('4');
   // 참여자 검색 페이지의 '🔍 제재 이력'으로 들어온 경우: #user=아이디 → 바로 제재 이력 창
   var userHash = location.hash.match(/^#user=(.+)$/);
   if (userHash) { try { openHist(decodeURIComponent(userHash[1]), '', 'all'); } catch(e) {} }

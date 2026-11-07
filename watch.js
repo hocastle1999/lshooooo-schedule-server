@@ -43,8 +43,9 @@ function nickInfo(id, ...extra) {
   const items = byUser.get(id) || [];
   const latest = nickNow.get(id) || (items[0] && items[0][1]) || extra.find(Boolean) || id;
   let prev = '';
-  for (const it of items) if (it[1] && it[1] !== latest) { prev = it[1]; break; }
-  if (!prev) prev = extra.find((n) => n && n !== latest) || '';
+  // 트래키파이가 닉네임 자리에 아이디를 넣어 둔 경우가 있어서, 아이디와 같은 값은 닉네임으로 치지 않는다
+  for (const it of items) if (it[1] && it[1] !== latest && it[1] !== id) { prev = it[1]; break; }
+  if (!prev) prev = extra.find((n) => n && n !== latest && n !== id) || '';
   return { nick: latest, prev };
 }
 
