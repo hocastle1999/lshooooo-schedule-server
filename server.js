@@ -7,6 +7,9 @@ const roulette = require('./roulette');
 const watch = require('./watch');
 const broadcasts = require('./broadcasts');
 const keepAwake = require('./keepawake');
+const auth = require('./auth');
+const audit = require('./audit');
+const backup = require('./backup');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -26,6 +29,10 @@ const DEFAULT_META = {
 // 이 파서를 전역 express.json()보다 먼저 등록해야 기본 100kb 제한에 안 걸립니다.
 app.use('/api/files', express.json({ limit: '9mb' }));
 app.use(express.json());
+// 로그인 확인과 변경 기록은 정적 파일·API 보다 먼저
+auth.mount(app);
+audit.mount(app);
+backup.mount(app);
 app.use(express.static(path.join(__dirname, 'public')));
 keepAwake.mount(app);
 roulette.mount(app);
@@ -357,6 +364,7 @@ app.listen(PORT, () => {
   console.log('==========================================');
   roulette.resume().catch((e) => console.error('[roulette] 복구 실패:', e.message));
   watch.resume().catch((e) => console.error('[watch] 복구 실패:', e.message));
+  backup.start({ onRestore: () => watch.reloadWatchlist() });
   doCrawl('시작 시 초기 크롤링');
   setInterval(() => doCrawl('정기 자동 갱신'), CRAWL_INTERVAL_MS);
 });

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>매니저 로그인</title>
+<link rel="icon" type="image/png" href="/icons/icon-schedule.png">
+<style>
+  :root{--bg:#F4F5F3;--surface:#FFFFFF;--surface-2:#EBEDEA;--border:#DADDD8;--text:#161A17;--text-dim:#5B655E;--accent:#0E9C8A;--danger:#C24545;--danger-soft:#F8E1E1;--shadow:0 1px 2px rgba(20,24,22,.06),0 8px 24px -12px rgba(20,24,22,.18);color-scheme:light;}
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){--bg:#12151A;--surface:#191E24;--surface-2:#20262E;--border:#2B333C;--text:#EDF1F4;--text-dim:#8D99A6;--accent:#33D9C2;--danger:#E17777;--danger-soft:#3A1E1E;--shadow:0 1px 2px rgba(0,0,0,.3),0 12px 28px -14px rgba(0,0,0,.6);color-scheme:dark;}
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:var(--bg);color:var(--text);}
+  body{font-family:"Gothic A1","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;}
+  .card{width:100%;max-width:360px;background:var(--surface);border:1px solid var(--border);border-radius:18px;box-shadow:var(--shadow);padding:24px;display:flex;flex-direction:column;gap:14px;}
+  .head{display:flex;align-items:center;gap:12px;}
+  .head img{width:46px;height:46px;border-radius:50%;}
+  h1{margin:0;font-size:20px;font-weight:800;}
+  p{margin:2px 0 0;color:var(--text-dim);font-size:13px;}
+  label{display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:var(--text-dim);font-weight:600;}
+  input{padding:11px 12px;border:1px solid var(--border);border-radius:10px;font:inherit;font-size:15px;background:var(--surface-2);color:var(--text);}
+  input:focus{outline:2px solid var(--accent);outline-offset:-1px;}
+  button{font:inherit;font-size:15px;font-weight:800;border:none;border-radius:10px;padding:12px;background:var(--accent);color:#fff;cursor:pointer;}
+  button:disabled{opacity:.6;cursor:default;}
+  .error{background:var(--danger-soft);color:var(--danger);border-radius:10px;padding:9px 11px;font-size:13px;}
+  .hint{font-size:12px;color:var(--text-dim);line-height:1.6;}
+</style>
+</head>
+<body>
+<form class="card" id="form">
+  <div class="head">
+    <img src="/icons/icon-schedule.png" alt="">
+    <div><h1>이상호 매니저 작업실</h1><p>매니저만 들어올 수 있어요</p></div>
+  </div>
+  <label>이름 (매니저 닉네임)<input name="name" maxlength="20" placeholder="예: 하늘하늘_" autocomplete="username" required></label>
+  <label>비밀번호<input name="password" type="password" autocomplete="current-password" required></label>
+  <div class="error" id="err" hidden></div>
+  <button type="submit" id="btn">로그인</button>
+  <div class="hint">한 번 로그인하면 이 브라우저에서 30일 동안 유지돼요. 이름은 변경 기록에 "누가 바꿨는지"로 남아요.</div>
+</form>
+<script>
+(function(){
+  var form = document.getElementById('form'), err = document.getElementById('err'), btn = document.getElementById('btn');
+  try { var saved = localStorage.getItem('managerName'); if (saved) form.name.value = saved; } catch(e) {}
+  (form.name.value ? form.password : form.name).focus();
+  form.addEventListener('submit', async function(e){
+    e.preventDefault();
+    err.hidden = true; btn.disabled = true; btn.textContent = '확인 중…';
+    try {
+      var res = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: form.name.value, password: form.password.value }) });
+      var d = await res.json().catch(function(){ return {}; });
+      if (!res.ok) throw new Error(d.error || ('HTTP ' + res.status));
+      try { localStorage.setItem('managerName', form.name.value.trim()); } catch(e2) {}
+      var next = new URLSearchParams(location.search).get('next') || '/';
+      // 서버는 #뒤(예: #rank)를 모르지만 브라우저가 로그인 화면 주소에 붙여 두므로 그대로 이어 준다
+      if (next.indexOf('#') < 0) next += location.hash;
+      location.replace(next.charAt(0) === '/' && next.charAt(1) !== '/' ? next : '/');
+    } catch(ex) {
+      err.textContent = ex.message; err.hidden = false;
+      btn.disabled = false; btn.textContent = '로그인';
+      form.password.select();
+    }
+  });
+})();
+</script>
+</body>
+</html>

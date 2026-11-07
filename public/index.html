@@ -132,6 +132,24 @@
   .memo-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;}
   .memo-foot .btn{white-space:nowrap;}
   .memo-saved{font-size:11.5px;color:var(--text-dim);}
+  .me{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text-dim);margin-left:4px;}
+  .me button{font:inherit;font-size:12px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-dim);border-radius:8px;padding:3px 9px;cursor:pointer;}
+  .me button:hover{border-color:var(--accent);color:var(--accent);}
+  .adm-tabs{display:flex;gap:6px;margin-bottom:10px;}
+  .adm-tab{font:inherit;font-size:12.5px;font-weight:700;border:1px solid var(--border);background:var(--surface-2);color:var(--text-dim);border-radius:999px;padding:5px 12px;cursor:pointer;}
+  .adm-tab.on{background:var(--accent);border-color:var(--accent);color:#06231F;}
+  .audit-list{display:flex;flex-direction:column;}
+  .audit-row{display:flex;gap:8px;align-items:baseline;font-size:12.5px;padding:6px 0;border-bottom:1px solid var(--border);}
+  .audit-row .t{flex:none;color:var(--text-dim);font-variant-numeric:tabular-nums;width:74px;}
+  .audit-row .w{flex:none;font-weight:700;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .audit-row .a{min-width:0;word-break:break-word;}
+  .audit-row .a b{font-weight:700;}
+  .audit-row .n{color:var(--text-dim);}
+  .bk-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12.5px;padding:8px 0;border-bottom:1px solid var(--border);}
+  .bk-row .k{font-size:11px;font-weight:700;border-radius:6px;padding:1px 7px;background:var(--surface-2);color:var(--text-dim);}
+  .bk-row .c{color:var(--text-dim);font-size:11.5px;flex-basis:100%;}
+  .bk-row .acts{margin-left:auto;display:flex;gap:6px;}
+  .bk-row .acts .btn,.bk-row .acts a{padding:4px 9px;font-size:12px;}
   .file-list{display:flex;flex-direction:column;gap:8px;margin-bottom:10px;}
   .file-item{border:1px solid var(--border);border-radius:12px;padding:9px 12px;background:var(--surface-2);display:flex;align-items:center;justify-content:space-between;gap:10px;}
   .file-item .txt{display:flex;flex-direction:column;gap:2px;overflow:hidden;min-width:0;}
@@ -188,6 +206,7 @@
 </head>
 <body>
 <div id="app"><div style="padding:40px;text-align:center;color:var(--text-dim);">불러오는 중…</div></div>
+<script src="/auth.js"></script>
 <script>
 (function(){
   "use strict";
@@ -455,6 +474,75 @@
     var d=new Date(ts);
     return (d.getMonth()+1)+'/'+d.getDate()+' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
   }
+  // ---- 로그인한 사람 / 변경 기록 / 백업 ----
+  var ME = { name: '', loginEnabled: false };
+  var ADM = { tab: 'audit', audit: null, auditAll: false, backups: null, labels: {} };
+  function meHTML(){
+    if(!ME.loginEnabled || !ME.name) return '';
+    return '<span class="me">👤 '+esc(ME.name)+' <button type="button" data-action="logout">로그아웃</button></span>';
+  }
+  function ago2(ts){
+    var d=new Date(ts), now=new Date();
+    var hm=pad(d.getHours())+':'+pad(d.getMinutes());
+    if(d.toDateString()===now.toDateString()) return '오늘 '+hm;
+    var y=new Date(now); y.setDate(now.getDate()-1);
+    if(d.toDateString()===y.toDateString()) return '어제 '+hm;
+    return (d.getMonth()+1)+'/'+d.getDate()+' '+hm;
+  }
+  var BK_KIND = { auto:'자동', manual:'직접', 'before-restore':'되돌리기 전' };
+  function adminHTML(){
+    var body;
+    if(ADM.tab==='audit'){
+      var list = ADM.audit ? ADM.audit.list.slice(0, ADM.auditAll ? 200 : 20) : null;
+      body = !list ? '<div class="empty">불러오는 중…</div>' : !list.length ? '<div class="empty">아직 기록이 없어요.</div>' :
+        '<div class="audit-list">'+list.map(function(r){
+          return '<div class="audit-row"><span class="t">'+esc(ago2(r.ts))+'</span><span class="w" title="'+esc(r.who)+'">'+esc(r.who)+'</span>'+
+            '<span class="a"><b>'+esc(r.action)+'</b>'+(r.detail?' · '+esc(r.detail):'')+(r.count>1?' <span class="n">('+r.count+'번)</span>':'')+'</span></div>';
+        }).join('')+'</div>'+
+        (!ADM.auditAll && ADM.audit.list.length>20 ? '<div style="margin-top:8px;"><button type="button" class="btn" data-action="audit-more">더 보기 ('+ADM.audit.total+')</button></div>' : '');
+    } else {
+      var bl = ADM.backups;
+      body = '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;"><button type="button" class="btn primary" data-action="backup-now">지금 백업</button>'+
+        '<span class="updated" style="margin:0">매일 자동으로 백업하고 7일치를 보관해요.</span></div>'+
+        (!bl ? '<div class="empty">불러오는 중…</div>' : !bl.length ? '<div class="empty">아직 백업이 없어요.</div>' :
+        bl.map(function(b){
+          var c=b.counts||{};
+          return '<div class="bk-row"><span class="k">'+esc(BK_KIND[b.kind]||b.kind)+'</span><b>'+esc(ago2(b.at))+'</b>'+(b.by&&b.kind!=='auto'?'<span class="updated" style="margin:0">'+esc(b.by)+'</span>':'')+
+            '<span class="acts"><a class="btn" href="/api/backups/'+encodeURIComponent(b.id)+'/download">내려받기</a><button type="button" class="btn" data-action="backup-restore" data-id="'+esc(b.id)+'">되돌리기</button></span>'+
+            '<span class="c">일정 '+(c.events||0)+' · 날짜 미정 '+(c.unscheduled||0)+' · 메모 '+(c.memos||0)+'페이지 · 주의 시청자 '+(c.watchlist||0)+'명</span></div>';
+        }).join(''));
+    }
+    return '<section class="card">'+
+      '<h2 style="font-weight:800;font-size:17px;margin:0 0 10px;">변경 기록 · 백업'+helpBtn('admin')+'</h2>'+
+      helpText('admin', '누가 언제 무엇을 바꿨는지(일정·메모·제재 기준·룰렛·주의 시청자 등)와 로그인 기록이 남아요. 메모 자동 저장처럼 자주 바뀌는 건 30분 안이면 한 줄로 합쳐요. 백업은 일정·날짜 미정 일정·메모장·제재 기준·주의 시청자를 매일 한 번 자동으로 저장해요. 되돌리면 그 직전 상태도 \'되돌리기 전\' 백업으로 남아서 다시 되돌릴 수 있어요.')+
+      '<div class="adm-tabs"><button type="button" class="adm-tab'+(ADM.tab==='audit'?' on':'')+'" data-action="adm-tab" data-tab="audit">변경 기록</button>'+
+      '<button type="button" class="adm-tab'+(ADM.tab==='backup'?' on':'')+'" data-action="adm-tab" data-tab="backup">백업</button></div>'+
+      body+'</section>';
+  }
+  async function loadAdmin(){
+    try {
+      if(ADM.tab==='audit'){ ADM.audit = await api('GET', '/api/audit?limit=200'); }
+      else { var r = await api('GET', '/api/backups'); ADM.backups = r.list; ADM.labels = r.labels; }
+    } catch(e){}
+    // 입력 중이면 다시 그리지 않는다
+    if(document.querySelector('.overlay')) return;
+    var active=document.activeElement;
+    if(active && (active.tagName==='INPUT'||active.tagName==='TEXTAREA') && active.value) return;
+    stashMemoDraft(); render();
+  }
+  function openRestoreModal(id){
+    var b=(ADM.backups||[]).find(function(x){ return x.id===id; }); if(!b) return;
+    var c=b.counts||{};
+    var items=[['events','일정 ('+(c.events||0)+'개)'],['unscheduled','날짜 미정 일정 ('+(c.unscheduled||0)+'개)'],['memos','메모장 ('+(c.memos||0)+'페이지)'],['sanctionRules','제재 기준'],['watchlist','주의 시청자 ('+(c.watchlist||0)+'명)']];
+    showModal('<h3>'+esc(ago2(b.at))+' 백업으로 되돌리기</h3>'+
+      '<form id="restore-form" class="field" style="gap:8px;">'+
+        '<input type="hidden" name="id" value="'+esc(id)+'">'+
+        items.map(function(it){ return '<label style="display:flex;gap:8px;align-items:center;font-size:13.5px;color:var(--text);"><input type="checkbox" name="keys" value="'+it[0]+'" checked>'+esc(it[1])+'</label>'; }).join('')+
+        '<p class="updated" style="margin:4px 0 0;">고른 항목이 이 백업 때 상태로 바뀌어요. 지금 상태는 \'되돌리기 전\' 백업으로 먼저 저장해서, 다시 되돌릴 수 있어요.</p>'+
+        '<div class="modal-actions"><button type="button" class="btn" data-action="close-modal">취소</button><button type="submit" class="btn primary">되돌리기</button></div>'+
+      '</form>', '');
+  }
+
   function filesHTML(){
     var list = (STATE.files||[]).map(function(f){
       return '<div class="file-item">'+
@@ -500,7 +588,7 @@
             TOOLS.map(function(l){ return '<a class="tool-btn" href="'+esc(l.url)+'" target="_blank" rel="noopener">'+esc(l.label)+'</a>'; }).join('')+
             '<button type="button" class="tool-btn" data-action="open-rules">📋 제재 기준</button>'+
           '</div>'+
-          '<div class="mgr-row">'+managersHTML()+'</div>'+
+          '<div class="mgr-row">'+managersHTML()+meHTML()+'</div>'+
         '</div>'+
       '</div>'+
       '<div class="top">'+
@@ -510,7 +598,7 @@
           '<button type="button" class="refresh-btn" id="refresh-btn" data-action="refresh">'+(refreshing?'새로고침 중…':'⟳ 공지 새로고침')+'</button>'+
         '</div>'+
       '</div>'+
-      '<div class="layout"><div style="display:flex;flex-direction:column;gap:18px;">'+calendarHTML()+unscheduledHTML()+worldsHTML()+'</div><div style="display:flex;flex-direction:column;gap:18px;">'+memoHTML()+filesHTML()+sidebarHTML()+'</div></div>'+
+      '<div class="layout"><div style="display:flex;flex-direction:column;gap:18px;">'+calendarHTML()+unscheduledHTML()+worldsHTML()+'</div><div style="display:flex;flex-direction:column;gap:18px;">'+memoHTML()+filesHTML()+adminHTML()+sidebarHTML()+'</div></div>'+
       '<div id="modal-slot"></div>';
     var btn = document.getElementById('refresh-btn');
     if(btn) btn.disabled = refreshing;
@@ -874,6 +962,11 @@
     if(action==='memo-tab'){ selectMemo(el.getAttribute('data-id')); return; }
     if(action==='memo-add'){ stashMemoDraft(); openMemoPageModal(null); return; }
     if(action==='memo-rename'){ var mp=(STATE.memos||[]).find(function(x){return x.id===el.getAttribute('data-id');}); if(mp) openMemoPageModal(mp); return; }
+    if(action==='logout'){ if(confirm('로그아웃할까요?')) api('POST','/api/logout').then(function(){ location.href='/login.html'; }); return; }
+    if(action==='adm-tab'){ ADM.tab=el.getAttribute('data-tab'); stashMemoDraft(); render(); loadAdmin(); return; }
+    if(action==='audit-more'){ ADM.auditAll=true; stashMemoDraft(); render(); return; }
+    if(action==='backup-now'){ el.disabled=true; api('POST','/api/backups').then(function(r){ ADM.backups=r.list; toast('지금 상태를 백업했어요'); stashMemoDraft(); render(); }).catch(function(e){ toast('백업 실패: '+e.message); el.disabled=false; }); return; }
+    if(action==='backup-restore'){ openRestoreModal(el.getAttribute('data-id')); return; }
     if(action==='open-rules'){ openRulesModal(false); return; }
     if(action==='edit-rules'){ openRulesModal(true); return; }
     if(action==='toggle-help'){ var hk=el.getAttribute('data-key'); helpOpen[hk]=!helpOpen[hk]; stashMemoDraft(); render(); return; }
@@ -970,6 +1063,17 @@
       saveMemo(fd5.get('id'), fd5.get('memo')||'', false);
       return;
     }
+    var restoreForm = ev.target.closest('#restore-form');
+    if(restoreForm){
+      ev.preventDefault();
+      var fdr = new FormData(restoreForm), keys = fdr.getAll('keys');
+      if(!keys.length){ toast('되돌릴 항목을 골라주세요'); return; }
+      if(!confirm('정말 되돌릴까요? 다른 매니저 화면에도 바로 반영돼요.')) return;
+      api('POST', '/api/backups/'+encodeURIComponent(fdr.get('id'))+'/restore', {keys: keys}).then(function(r){
+        closeModal(); ADM.backups = r.list; toast('되돌렸어요'); loadState(); loadAdmin();
+      }).catch(function(e){ toast('되돌리기 실패: '+e.message); });
+      return;
+    }
     var rulesForm = ev.target.closest('#rules-form');
     if(rulesForm){
       ev.preventDefault();
@@ -999,6 +1103,9 @@
   });
 
   loadState();
+  api('GET', '/api/me').then(function(r){ ME = r; stashMemoDraft(); render(); }).catch(function(){});
+  loadAdmin();
+  setInterval(loadAdmin, 60000);
   // 방송 참여 중 매니저는 5초마다 따로 받아와서 그 칸만 다시 그린다
   // (화면 전체를 다시 그리지 않으므로 일정·메모 입력 중이어도 괜찮다).
   setInterval(async function(){

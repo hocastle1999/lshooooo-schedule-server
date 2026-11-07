@@ -892,4 +892,11 @@ function mount(app) {
   });
 }
 
-module.exports = { mount, resume, managers, onPacket, resyncManagers };
+// 백업으로 되돌린 뒤 주의 시청자 목록을 저장소에서 다시 읽는다
+async function reloadWatchlist() {
+  const wl = await getState(WL_KEY, []);
+  watchlist = Array.isArray(wl) ? wl : [];
+  wlRebuild();
+}
+
+module.exports = { mount, resume, managers, onPacket, resyncManagers, reloadWatchlist };
