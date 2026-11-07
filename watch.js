@@ -782,6 +782,20 @@ function mount(app) {
     const since = parseInt(req.query.since, 10) || 0;
     res.json({ seq: wlSeq, alerts: wlAlerts.filter((a) => a.seq > since).reverse() });
   });
+  // 알림 지우기 (하나 / 전체). 아래 /api/watchlist/:id 보다 먼저 등록해야 'alerts' 가 아이디로 잡히지 않는다.
+  app.delete('/api/watchlist/alerts', async (req, res) => {
+    await ensureLoaded();
+    wlAlerts = [];
+    wlSaveSoon();
+    res.json({ ok: true, seq: wlSeq, alerts: [] });
+  });
+  app.delete('/api/watchlist/alerts/:seq', async (req, res) => {
+    await ensureLoaded();
+    const seq = parseInt(req.params.seq, 10);
+    wlAlerts = wlAlerts.filter((x) => x.seq !== seq);
+    wlSaveSoon();
+    res.json({ ok: true, seq: wlSeq, alerts: wlAlerts.slice(-100).reverse() });
+  });
   // 추가: 아이디 또는 닉네임. 닉네임이면 지금 참여자·제재 기록에서 아이디를 찾는다.
   app.post('/api/watchlist', async (req, res) => {
     await ensureLoaded();

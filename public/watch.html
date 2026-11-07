@@ -173,6 +173,11 @@
   .feed-row .who{font-weight:800;flex:none;}
   .feed-row .msg{word-break:break-word;}
   .feed-row.fresh{background:var(--warm-soft);border-radius:8px;}
+  .feed-row .msg{flex:1;}
+  .feed-x{flex:none;font:inherit;font-size:13px;line-height:1;background:none;border:none;color:var(--text-dim);cursor:pointer;padding:2px 6px;border-radius:6px;}
+  .feed-x:hover{color:var(--danger);background:var(--danger-soft);}
+  .feed-clear{margin-left:auto;font:inherit;font-size:12px;font-weight:700;border:1px solid var(--border);background:var(--surface-2);color:var(--text-dim);border-radius:8px;padding:4px 10px;cursor:pointer;}
+  .feed-clear:hover{border-color:var(--danger);color:var(--danger);}
   .hx-watch{font:inherit;font-size:12px;font-weight:700;border:1px solid var(--border);background:var(--surface-2);color:var(--text);border-radius:8px;padding:4px 9px;cursor:pointer;}
   .hx-watch.on{border-color:var(--warm);color:var(--warm);background:var(--warm-soft);}
   mark{background:var(--warm-soft);color:inherit;border-radius:3px;padding:0 1px;}
@@ -363,7 +368,7 @@
     </section>
 
     <section class="card">
-      <h2>채팅 알림 <span class="badge" id="feedBadge">최근 100개</span></h2>
+      <h2>채팅 알림 <span class="badge" id="feedBadge">최근 100개</span><button type="button" class="feed-clear" id="feedClear">전체 지우기</button></h2>
       <div class="feed" id="wlFeed"><div class="vempty">아직 알림이 없어요.</div></div>
     </section>
   </div>
@@ -910,9 +915,12 @@
   function feedHTML(a, fresh){
     var d = new Date(a.ts);
     return '<div class="feed-row' + (fresh ? ' fresh' : '') + '"><span class="t">' + pad(d.getMonth()+1) + '/' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()) + '</span>' +
-      '<span class="who">' + esc(a.nick) + ' <span class="uid">(' + esc(a.id) + ')</span></span><span class="msg">' + esc(a.message) + '</span></div>';
+      '<span class="who">' + esc(a.nick) + ' <span class="uid">(' + esc(a.id) + ')</span></span><span class="msg">' + esc(a.message) + '</span>' +
+      '<button type="button" class="feed-x" data-feed-del="' + a.seq + '" title="이 알림 지우기" aria-label="이 알림 지우기">✕</button></div>';
   }
   function renderFeed(freshFrom){
+    $('feedBadge').textContent = wlFeed.length ? '최근 ' + Math.min(wlFeed.length, 100) + '개' : '없음';
+    $('feedClear').hidden = !wlFeed.length;
     $('wlFeed').innerHTML = wlFeed.length ? wlFeed.slice(0, 100).map(function(a){ return feedHTML(a, freshFrom && a.seq > freshFrom); }).join('') : '<div class="vempty">아직 알림이 없어요.</div>';
   }
   function renderWatchlist(list){
@@ -1006,6 +1014,25 @@
       try { var r = await wlPost('/api/watchlist/' + encodeURIComponent(id), { memo: memo }); renderWatchlist(r.list); } catch(err) { toast('메모 저장 실패: ' + err.message); }
     }
   });
+  // 알림 지우기: 하나(✕) / 전체. 매니저 모두에게서 지워진다.
+  $('wlFeed').addEventListener('click', async function(e){
+    var b = e.target.closest('[data-feed-del]'); if (!b) return;
+    var seq = Number(b.getAttribute('data-feed-del'));
+    try {
+      await wlPost('/api/watchlist/alerts/' + seq, {}, 'DELETE');
+      wlFeed = wlFeed.filter(function(a){ return a.seq !== seq; });
+      renderFeed();
+    } catch(err) { toast('지우기 실패: ' + err.message); }
+  });
+  $('feedClear').addEventListener('click', async function(){
+    if (!confirm('채팅 알림을 모두 지울까요? 다른 매니저 화면에서도 지워져요.')) return;
+    try {
+      await wlPost('/api/watchlist/alerts', {}, 'DELETE');
+      wlFeed = []; renderFeed(); toast('채팅 알림을 모두 지웠어요');
+    } catch(err) { toast('지우기 실패: ' + err.message); }
+  });
+  // 5페이지를 보고 있는 동안은 20초마다 목록·알림을 통째로 다시 받아서 다른 매니저가 지운 것도 맞춘다
+  setInterval(function(){ if (currentPage === '5') loadWatchlist(); }, 20000);
   $('wlSound').addEventListener('click', function(){
     wlSoundOn = !wlSoundOn;
     try { localStorage.setItem('wl-sound', wlSoundOn ? '1' : '0'); } catch(e) {}
