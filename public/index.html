@@ -479,7 +479,8 @@
   }
   // ---- 로그인한 사람 / 변경 기록 / 백업 ----
   var ME = { name: '', loginEnabled: false };
-  var ADM = { tab: 'audit', audit: null, auditAll: false, backups: null, labels: {} };
+  // open: 카드를 펼쳤는지 (처음엔 접혀 있고, 제목을 눌러야 내용이 보인다)
+  var ADM = { open: false, tab: 'audit', audit: null, auditAll: false, backups: null, labels: {} };
   function meHTML(){
     if(!ME.loginEnabled || !ME.name) return '';
     return '<span class="me">👤 '+esc(ME.name)+' <button type="button" data-action="logout">로그아웃</button></span>';
@@ -493,6 +494,7 @@
     return (d.getMonth()+1)+'/'+d.getDate()+' '+hm;
   }
   var BK_KIND = { auto:'자동', manual:'직접', 'before-restore':'되돌리기 전' };
+  var ADMIN_HELP = '누가 언제 무엇을 바꿨는지(일정·메모·제재 기준·룰렛·주의 시청자 등)와 로그인 기록이 남아요. 메모 자동 저장처럼 자주 바뀌는 건 30분 안이면 한 줄로 합쳐요. 백업은 일정·날짜 미정 일정·메모장·제재 기준·주의 시청자를 매일 한 번 자동으로 저장해요. 되돌리면 그 직전 상태도 \'되돌리기 전\' 백업으로 남아서 다시 되돌릴 수 있어요.';
   function adminHTML(){
     var body;
     if(ADM.tab==='audit'){
@@ -517,14 +519,18 @@
             '<span class="c">일정 '+(c.events||0)+' · 날짜 미정 '+(c.unscheduled||0)+' · 메모 '+(c.memos||0)+'페이지 · 주의 시청자 '+(c.watchlist||0)+'명</span></div>';
         }).join(''));
     }
-    return '<section class="card">'+
-      '<h2 style="font-weight:800;font-size:17px;margin:0 0 10px;">변경 기록 · 백업'+helpBtn('admin')+'</h2>'+
-      helpText('admin', '누가 언제 무엇을 바꿨는지(일정·메모·제재 기준·룰렛·주의 시청자 등)와 로그인 기록이 남아요. 메모 자동 저장처럼 자주 바뀌는 건 30분 안이면 한 줄로 합쳐요. 백업은 일정·날짜 미정 일정·메모장·제재 기준·주의 시청자를 매일 한 번 자동으로 저장해요. 되돌리면 그 직전 상태도 \'되돌리기 전\' 백업으로 남아서 다시 되돌릴 수 있어요.')+
+    var head = '<h2 style="font-weight:800;font-size:17px;margin:0'+(ADM.open?' 0 10px':'')+';display:flex;align-items:center;gap:6px;">'+
+      '<button type="button" data-action="adm-toggle" style="font:inherit;font-weight:800;background:none;border:none;color:inherit;padding:0;cursor:pointer;">'+(ADM.open?'▾':'▸')+' 변경 기록 · 백업</button>'+helpBtn('admin')+
+      (ADM.open?'':'<button type="button" class="btn" data-action="adm-toggle" style="margin-left:auto;padding:4px 10px;font-size:12px;">보기</button>')+'</h2>';
+    if(!ADM.open) return '<section class="card">'+head+helpText('admin', ADMIN_HELP)+'</section>';
+    return '<section class="card">'+head+
+      helpText('admin', ADMIN_HELP)+
       '<div class="adm-tabs"><button type="button" class="adm-tab'+(ADM.tab==='audit'?' on':'')+'" data-action="adm-tab" data-tab="audit">변경 기록</button>'+
       '<button type="button" class="adm-tab'+(ADM.tab==='backup'?' on':'')+'" data-action="adm-tab" data-tab="backup">백업</button></div>'+
       body+'</section>';
   }
   async function loadAdmin(){
+    if(!ADM.open) return; // 접혀 있으면 불러오지 않는다
     try {
       if(ADM.tab==='audit'){ ADM.audit = await api('GET', '/api/audit?limit=200'); }
       else { var r = await api('GET', '/api/backups'); ADM.backups = r.list; ADM.labels = r.labels; }
@@ -968,6 +974,7 @@
     if(action==='memo-add'){ stashMemoDraft(); openMemoPageModal(null); return; }
     if(action==='memo-rename'){ var mp=(STATE.memos||[]).find(function(x){return x.id===el.getAttribute('data-id');}); if(mp) openMemoPageModal(mp); return; }
     if(action==='logout'){ if(confirm('로그아웃할까요?')) api('POST','/api/logout').then(function(){ location.href='/login.html'; }); return; }
+    if(action==='adm-toggle'){ ADM.open=!ADM.open; stashMemoDraft(); render(); if(ADM.open) loadAdmin(); return; }
     if(action==='adm-tab'){ ADM.tab=el.getAttribute('data-tab'); stashMemoDraft(); render(); loadAdmin(); return; }
     if(action==='audit-more'){ ADM.auditAll=true; stashMemoDraft(); render(); return; }
     if(action==='backup-now'){ el.disabled=true; api('POST','/api/backups').then(function(r){ ADM.backups=r.list; toast('지금 상태를 백업했어요'); stashMemoDraft(); render(); }).catch(function(e){ toast('백업 실패: '+e.message); el.disabled=false; }); return; }
