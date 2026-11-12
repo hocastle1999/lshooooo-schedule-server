@@ -120,15 +120,27 @@ function tkFetch(url, { urgent = false } = {}) {
     tkPump();
   });
 }
+// 트래키파이가 403(접속 거부)을 주면 우회하지 않고 6시간 동안 요청을 완전히 멈춘다.
+// 그동안은 저장해 둔 기록으로만 보여준다.
+const TK_BLOCK_MS = 6 * 3600 * 1000;
+let tkBlockedUntil = 0;
 async function tkPump() {
   if (tkBusy) return;
   const job = tkQueue.shift();
   if (!job) return;
+  if (Date.now() < tkBlockedUntil) {
+    job.reject(new Error('트래키파이가 이 서버의 접속을 막아서(403) 잠시 쉬는 중이에요'));
+    return tkPump();
+  }
   tkBusy = true;
   let wait = TK_GAP_MS;
   try {
     const res = await fetch(job.url, { headers: { 'User-Agent': 'Mozilla/5.0 lshooooo-schedule' }, signal: AbortSignal.timeout(20000) });
-    if (res.status === 429 && job.tries++ < 4) {
+    if (res.status === 403) {
+      tkBlockedUntil = Date.now() + TK_BLOCK_MS;
+      console.log('[watch] 트래키파이 403 → 6시간 동안 트래키파이 요청을 멈춥니다');
+      job.reject(new Error('트래키파이가 이 서버의 접속을 막아서(403) 잠시 쉬는 중이에요'));
+    } else if (res.status === 429 && job.tries++ < 4) {
       tkQueue.unshift(job); // 잠깐 쉬었다가 같은 요청을 다시
       wait = 3000;
     } else if (!res.ok) {
@@ -210,7 +222,7 @@ async function syncSanctions() {
     await saveSanctions();
     console.log(`[watch] 제재 기록 +${added}건 (저장 ${sanctions.items.length}건)`);
   } catch (e) {
-    syncError = '제재 기록을 받지 못했습니다: ' + e.message;
+    syncError = '새 제재 기록을 받지 못했어요 (저장해 둔 기록으로 보여줘요): ' + e.message;
     console.error('[watch]', syncError);
   } finally {
     syncing = false;
