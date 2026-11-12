@@ -113,7 +113,11 @@ function rebuildIndex() {
 const TK_GAP_MS = 1100;
 const tkQueue = [];
 let tkBusy = false;
+// 트래키파이가 접속을 막아서(2026-11-12, 403) 트래키파이 요청은 모두 끈다.
+// 저장해 둔 제재 기록(그때까지)은 참여자 검색의 제재 수·이전 닉네임 표시에만 쓴다.
+const TRACKIFY_OFF = true;
 function tkFetch(url, { urgent = false } = {}) {
+  if (TRACKIFY_OFF) return Promise.reject(new Error('트래키파이 요청은 꺼져 있어요'));
   return new Promise((resolve, reject) => {
     const job = { url, resolve, reject, tries: 0 };
     if (urgent) tkQueue.unshift(job); else tkQueue.push(job);
@@ -377,8 +381,8 @@ function startChat() {
   chat.on('packet', onPacket);
   keepAwake.acquire('watch');
   setInterval(resyncManagers, RESYNC_MS);
-  setInterval(syncSanctions, SYNC_EVERY_MS);
-  syncSanctions();
+  // 트래키파이 제재 기록 갱신은 끔 (TRACKIFY_OFF)
+  if (!TRACKIFY_OFF) { setInterval(syncSanctions, SYNC_EVERY_MS); syncSanctions(); }
 }
 
 // 같은 아이디로 여러 번 접속한 경우("abc", "abc(2)") 한 명으로 묶는다.
