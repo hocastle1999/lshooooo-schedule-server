@@ -250,6 +250,7 @@
   var BC = {};        // "시작~끝" → { at, until, days: { 날짜: {minutes, titles} } }
   var bcWanted = null; // 지금 달력에 보이는 기간
   function bcMark(bc, key){
+    return ''; // 방송 여부 표시(트래키파이 방송 기록)는 없앴다
     if(!bc || !bc.days) return '';
     var d = bc.days[key];
     if(d){
@@ -613,7 +614,6 @@
       '<div id="modal-slot"></div>';
     var btn = document.getElementById('refresh-btn');
     if(btn) btn.disabled = refreshing;
-    ensureBroadcasts();
   }
 
   function openDayModal(key, prefill){

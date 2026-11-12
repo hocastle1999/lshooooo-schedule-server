@@ -5,7 +5,6 @@ const { runWorldsCrawl } = require('./worlds');
 const { getState, setState, deleteState } = require('./store');
 const roulette = require('./roulette');
 const watch = require('./watch');
-const broadcasts = require('./broadcasts');
 const keepAwake = require('./keepawake');
 const auth = require('./auth');
 const audit = require('./audit');
@@ -37,7 +36,6 @@ app.use(express.static(path.join(__dirname, 'public')));
 keepAwake.mount(app);
 roulette.mount(app);
 watch.mount(app);
-broadcasts.mount(app);
 
 // 지금 돌고 있는 버전 (배포 확인용, /deploy-site 가 씀). Render 가 배포한 커밋을 RENDER_GIT_COMMIT 으로 넣어준다.
 const STARTED_AT = Date.now();
@@ -365,6 +363,8 @@ app.listen(PORT, () => {
   roulette.resume().catch((e) => console.error('[roulette] 복구 실패:', e.message));
   watch.resume().catch((e) => console.error('[watch] 복구 실패:', e.message));
   backup.start({ onRestore: () => watch.reloadWatchlist() });
+  // 트래키파이 약관(무단 수집·복제 금지)에 맞춰, 예전에 받아 저장해 둔 트래키파이 데이터를 지운다.
+  for (const k of ['sanctions', 'channelCounts', 'userSummaries', 'broadcasts']) deleteState(k).catch(() => {});
   doCrawl('시작 시 초기 크롤링');
   setInterval(() => doCrawl('정기 자동 갱신'), CRAWL_INTERVAL_MS);
 });
