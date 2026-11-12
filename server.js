@@ -331,6 +331,8 @@ async function doCrawl(reason) {
     let result;
     try {
       const r = await runCrawl();
+      // 0개를 가져오면(게시판이 덜 그려진 경우 등) 기존 공지를 지우지 않고 그대로 둔다
+      if (!r.notices.length) throw new Error('공지를 0개 가져와서 기존 공지를 그대로 둡니다');
       await setState('notices', r.notices);
       await setState('meta', r.meta);
       console.log(`[crawler] (${reason}) 공지 ${r.notices.length}개 갱신 - ${r.meta.crawledAtLabel}`);

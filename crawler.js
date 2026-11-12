@@ -115,6 +115,12 @@ async function runCrawl() {
       extraHTTPHeaders: { 'Accept-Language': 'ko-KR,ko;q=0.9' },
     });
     const response = await page.goto(BOARD_URL, { waitUntil: 'networkidle', timeout: 30000 });
+    // 글 목록이 늦게 그려질 때가 있어서, 본문 글자가 충분히 생길 때까지 최대 20초 기다린다
+    try {
+      await page.waitForFunction(() => document.body.innerText.length > 400, { timeout: 20000 });
+    } catch (e) {
+      console.log('[crawler] 글 목록을 기다리다 시간 초과');
+    }
     await page.waitForTimeout(1500);
     // 가상 스크롤 목록이라 스크롤해야 더 많은 글이 렌더링됩니다.
     for (let i = 0; i < 4; i++) {
