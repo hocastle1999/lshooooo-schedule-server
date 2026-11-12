@@ -599,6 +599,7 @@
           '<div class="title-row"><img class="title-icon" src="/icons/icon-schedule.png" alt=""><h1>'+esc(STATE.meta.streamer)+' 매니저 작업실</h1>'+
             TOOLS.map(function(l){ return '<a class="tool-btn" href="'+esc(l.url)+'" target="_blank" rel="noopener">'+esc(l.label)+'</a>'; }).join('')+
             '<button type="button" class="tool-btn" data-action="open-rules">📋 제재 기준</button>'+
+            '<button type="button" class="tool-btn" data-action="open-notes">📰 패치 노트</button>'+
           '</div>'+
           '<div class="mgr-row">'+managersHTML()+meHTML()+'</div>'+
         '</div>'+
@@ -643,6 +644,23 @@
     document.getElementById('modal-slot').innerHTML = '<div class="overlay" data-action="overlay" data-key="'+key+'"><div class="modal" data-stop="1">'+innerHtml+'</div></div>';
   }
   // 📋 제재 기준: 누르면 내용을 보여주고, '수정'으로 같은 창에서 고칠 수 있다.
+  // 📰 패치 노트: 제재 기준과 같은 방식 (보기 → 수정 → 저장)
+  function openNotesModal(editing){
+    var text = (STATE.patchNotes && STATE.patchNotes.text) || '';
+    var inner = editing
+      ? '<h3>📰 패치 노트 수정</h3>'+
+        '<form id="notes-form" class="field" style="gap:10px;">'+
+          '<textarea name="text" class="rules-edit">'+esc(text)+'</textarea>'+
+          '<div class="modal-actions"><button type="button" class="btn" data-action="open-notes">취소</button><button type="submit" class="btn primary">저장</button></div>'+
+        '</form>'
+      : '<h3>📰 패치 노트</h3>'+
+        '<div class="rules-text">'+(text ? esc(text) : '<span style="color:var(--text-dim)">아직 적힌 내용이 없어요. 수정을 눌러 적어주세요.</span>')+'</div>'+
+        '<div class="modal-actions"><button type="button" class="btn" data-action="close-modal">닫기</button><button type="button" class="btn primary" data-action="edit-notes">수정</button></div>';
+    showModal(inner, '');
+    document.querySelector('#modal-slot .modal').classList.add('wide');
+    if(editing){ var ta=document.querySelector('#notes-form textarea'); if(ta) ta.focus(); }
+  }
+
   function openRulesModal(editing){
     var text = (STATE.sanctionRules && STATE.sanctionRules.text) || '';
     var inner = editing
@@ -703,6 +721,7 @@
     STATE.meta = data.meta || STATE.meta;
     STATE.managers = data.managers || STATE.managers;
     STATE.sanctionRules = data.sanctionRules || STATE.sanctionRules;
+    STATE.patchNotes = data.patchNotes || STATE.patchNotes;
     render();
   }
 
@@ -983,6 +1002,8 @@
     if(action==='audit-clear'){ if(!confirm('변경 기록을 모두 지울까요? 다른 매니저 화면에서도 지워져요.')) return; api('DELETE','/api/audit').then(function(r){ ADM.audit=r; toast('변경 기록을 모두 지웠어요'); stashMemoDraft(); render(); }).catch(function(e){ toast('지우기 실패: '+e.message); }); return; }
     if(action==='backup-del'){ if(!confirm('이 백업을 삭제할까요? 삭제하면 이 백업으로는 되돌릴 수 없어요.')) return; api('DELETE','/api/backups/'+encodeURIComponent(el.getAttribute('data-id'))).then(function(r){ ADM.backups=r.list; toast('백업을 삭제했어요'); stashMemoDraft(); render(); }).catch(function(e){ toast('삭제 실패: '+e.message); }); return; }
     if(action==='open-rules'){ openRulesModal(false); return; }
+    if(action==='open-notes'){ openNotesModal(false); return; }
+    if(action==='edit-notes'){ openNotesModal(true); return; }
     if(action==='edit-rules'){ openRulesModal(true); return; }
     if(action==='toggle-help'){ var hk=el.getAttribute('data-key'); helpOpen[hk]=!helpOpen[hk]; stashMemoDraft(); render(); return; }
     if(action==='memo-move'){ moveMemo(el.getAttribute('data-id'), Number(el.getAttribute('data-dir'))); return; }
@@ -1087,6 +1108,14 @@
       api('POST', '/api/backups/'+encodeURIComponent(fdr.get('id'))+'/restore', {keys: keys}).then(function(r){
         closeModal(); ADM.backups = r.list; toast('되돌렸어요'); loadState(); loadAdmin();
       }).catch(function(e){ toast('되돌리기 실패: '+e.message); });
+      return;
+    }
+    var notesForm = ev.target.closest('#notes-form');
+    if(notesForm){
+      ev.preventDefault();
+      api('POST', '/api/patch-notes', {text: new FormData(notesForm).get('text') || ''}).then(function(r){
+        STATE.patchNotes = r.patchNotes; openNotesModal(false); toast('패치 노트를 저장했어요');
+      }).catch(function(e){ toast('저장 실패: '+e.message); });
       return;
     }
     var rulesForm = ev.target.closest('#rules-form');

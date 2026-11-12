@@ -57,7 +57,8 @@ app.get('/api/state', async (req, res) => {
   ]);
   // files에는 이름/크기/날짜 같은 목록 정보만 있고, 파일 내용 자체는 따로 저장되어 있습니다
   // (20초마다 이 API를 부르기 때문에 파일 내용을 같이 보내면 안 됩니다).
-  res.json({ events, notices, unscheduled, memos, meta, files, worlds, sanctionRules, managers: watch.managers() });
+  const patchNotes = await getState('patchNotes', { text: DEFAULT_PATCH_NOTES, updatedAt: 0 });
+  res.json({ events, notices, unscheduled, memos, meta, files, worlds, sanctionRules, patchNotes, managers: watch.managers() });
 });
 
 // ---- 메모장 (여러 페이지) ----
@@ -91,6 +92,31 @@ async function loadSanctionRules() {
   if (page && memos.length > 1) await setState('memos', memos.filter((m) => m !== page));
   return rules;
 }
+
+// ---- 패치 노트 ----
+// 제목 옆 '📰 패치 노트' 버튼으로 보는 글. 처음엔 기본 내용으로 시작하고, 매니저가 고칠 수 있다.
+const DEFAULT_PATCH_NOTES = [
+  '📢 이상호 매니저 작업실 업데이트',
+  '',
+  '[11월 12일]',
+  '- 🔒 매니저 로그인 (이름 + 비밀번호, 30일 유지)',
+  '- 📝 변경 기록 · 💾 매일 자동 백업 + 되돌리기 (작업실 아래 카드, 눌러서 펼치기)',
+  '- 🔎 참여자 검색 · ⭐ 주의 시청자 (채팅하면 알림)',
+  '- 🗓 달력 일정 메모가 제목 아래에 표시',
+  '- 롤 월즈 경기 중 점수가 밀려 보이던 문제, 공지가 비던 문제 수정',
+  '- 트래키파이 약관에 맞춰 제재 이력·순위·달력 방송 여부 기능 정리',
+  '',
+  '※ 열어 둔 화면은 새로고침(F5) 해주세요',
+].join('\n');
+
+app.post('/api/patch-notes', async (req, res) => {
+  const { text } = req.body || {};
+  if (typeof text !== 'string') return res.status(400).json({ error: '내용이 필요합니다' });
+  if (text.length > MAX_MEMO_CHARS) return res.status(413).json({ error: '내용이 너무 깁니다' });
+  const notes = { text, updatedAt: Date.now() };
+  await setState('patchNotes', notes);
+  res.json({ ok: true, patchNotes: notes });
+});
 
 app.post('/api/sanction-rules', async (req, res) => {
   const { text } = req.body || {};

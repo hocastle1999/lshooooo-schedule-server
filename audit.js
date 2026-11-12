@@ -80,6 +80,7 @@ async function describe(req) {
     return ['첨부 파일 삭제', short(f && f.name)];
   }
   if (m === 'POST' && p === '/api/sanction-rules') return ['제재 기준 수정', '', true];
+  if (m === 'POST' && p === '/api/patch-notes') return ['패치 노트 수정', '', true];
   if (m === 'POST' && p === '/api/refresh') return ['공지 새로고침', '', true];
   if (m === 'POST' && p === '/api/roulette/start') return ['후원 룰렛 수집 시작', short(b.streamer)];
   if (m === 'POST' && p === '/api/roulette/stop') return ['후원 룰렛 수집 중지', ''];
