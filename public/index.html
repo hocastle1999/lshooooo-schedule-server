@@ -373,10 +373,17 @@
     '</article>';
   }
 
+  // 공지 카드 접기/펼치기 (이 브라우저에 기억)
+  var NOTICE_OPEN = true;
+  try { NOTICE_OPEN = localStorage.getItem('noticesOpen') !== '0'; } catch(e) {}
   function sidebarHTML(){
+    var head = '<h2 style="display:flex;align-items:center;gap:6px;">'+
+      '<button type="button" data-action="notices-toggle" style="font:inherit;font-weight:inherit;background:none;border:none;color:inherit;padding:0;cursor:pointer;">'+(NOTICE_OPEN?'▾':'▸')+' 최근 방송 공지</button>'+helpBtn('notices')+
+      (NOTICE_OPEN?'':'<button type="button" class="btn" data-action="notices-toggle" style="margin-left:auto;padding:4px 10px;font-size:12px;">보기 ('+STATE.notices.length+')</button>')+'</h2>';
+    if(!NOTICE_OPEN) return '<section class="card side">'+head+
+      helpText('notices', '공지는 '+esc(STATE.meta.streamer)+'님이 방송국 게시판에 직접 올린 글을 그대로 가져온 것입니다. 제목을 누르면 접거나 펼칠 수 있어요.')+'</section>';
     var list = STATE.notices.length ? STATE.notices.map(noticeCard).join('') : '<div class="empty-notices">아직 크롤링된 공지가 없습니다. 잠시 후 새로고침 해보세요.</div>';
-    return '<section class="card side">'+
-      '<h2>최근 방송 공지'+helpBtn('notices')+'</h2>'+
+    return '<section class="card side">'+head+
       '<p class="updated">'+esc(STATE.meta.crawledAtLabel)+' · <a href="'+esc(STATE.meta.boardUrl)+'" target="_blank" rel="noopener" style="color:var(--accent)">게시판 원문</a></p>'+
       helpText('notices', '공지는 '+esc(STATE.meta.streamer)+'님이 방송국 게시판에 직접 올린 글을 그대로 가져온 것입니다. 날짜 표기가 없는 글은 앞뒤 글을 참고한 추정 날짜입니다. 2시간마다 자동으로 다시 가져오고, 위쪽 공지 새로고침 버튼으로 즉시 갱신할 수 있습니다.')+
       '<div class="notice-list">'+list+'</div>'+
@@ -993,6 +1000,7 @@
     if(action==='memo-add'){ stashMemoDraft(); openMemoPageModal(null); return; }
     if(action==='memo-rename'){ var mp=(STATE.memos||[]).find(function(x){return x.id===el.getAttribute('data-id');}); if(mp) openMemoPageModal(mp); return; }
     if(action==='logout'){ if(confirm('로그아웃할까요?')) api('POST','/api/logout').then(function(){ location.href='/login.html'; }); return; }
+    if(action==='notices-toggle'){ NOTICE_OPEN=!NOTICE_OPEN; try{ localStorage.setItem('noticesOpen', NOTICE_OPEN?'1':'0'); }catch(e){} stashMemoDraft(); render(); return; }
     if(action==='adm-toggle'){ ADM.open=!ADM.open; stashMemoDraft(); render(); if(ADM.open) loadAdmin(); return; }
     if(action==='adm-tab'){ ADM.tab=el.getAttribute('data-tab'); stashMemoDraft(); render(); loadAdmin(); return; }
     if(action==='audit-more'){ ADM.auditAll=true; stashMemoDraft(); render(); return; }
