@@ -98,6 +98,10 @@ async function loadSanctionRules() {
 const DEFAULT_PATCH_NOTES = [
   '📢 이상호 매니저 작업실 업데이트',
   '',
+  '[11월 14일]',
+  '- 📰 패치 노트 (제재 기준 옆, 매니저가 수정 가능)',
+  '- 📢 최근 방송 공지 접기/펼치기 (제목 누르기, 내 브라우저에 기억)',
+  '',
   '[11월 12일]',
   '- 🔒 매니저 로그인 (이름 + 비밀번호, 30일 유지)',
   '- 📝 변경 기록 · 💾 매일 자동 백업 + 되돌리기 (작업실 아래 카드, 눌러서 펼치기)',
@@ -108,6 +112,32 @@ const DEFAULT_PATCH_NOTES = [
   '',
   '※ 열어 둔 화면은 새로고침(F5) 해주세요',
 ].join('\n');
+
+// 매니저가 이미 저장한 패치 노트가 있으면 기본 내용이 안 보이므로, 새 날짜 묶음을 한 번만 맨 위에 끼워 넣는다.
+// (한 번 넣은 묶음은 patchNotesAdded에 적어 두어, 매니저가 지워도 다시 넣지 않는다)
+async function addPatchNoteSections() {
+  const saved = await getState('patchNotes', null);
+  const added = await getState('patchNotesAdded', []);
+  if (!saved || typeof saved.text !== 'string') return;
+  const lines = DEFAULT_PATCH_NOTES.split('\n');
+  const sections = []; // [{ head, body }] 기본 내용의 날짜 묶음
+  for (let i = 0; i < lines.length; i++) {
+    if (!/^\[.+\]$/.test(lines[i])) continue;
+    let j = i + 1;
+    while (j < lines.length && lines[j] !== '') j++;
+    sections.push({ head: lines[i], body: lines.slice(i, j).join('\n') });
+  }
+  const fresh = sections.filter((s) => !added.includes(s.head) && !saved.text.includes(s.head));
+  const seen = sections.map((s) => s.head);
+  if (fresh.length) {
+    const t = saved.text.split('\n');
+    const at = t.length > 1 && t[1] === '' ? 2 : 0; // 첫 줄 제목 아래
+    t.splice(at, 0, ...fresh.map((s) => s.body + '\n').join('\n').split('\n'));
+    await setState('patchNotes', { text: t.join('\n'), updatedAt: Date.now() });
+    console.log('[patch-notes] 추가:', fresh.map((s) => s.head).join(', '));
+  }
+  if (seen.some((h) => !added.includes(h))) await setState('patchNotesAdded', [...new Set([...added, ...seen])]);
+}
 
 app.post('/api/patch-notes', async (req, res) => {
   const { text } = req.body || {};
@@ -393,6 +423,7 @@ app.listen(PORT, () => {
   backup.start({ onRestore: () => watch.reloadWatchlist() });
   // 트래키파이 약관(무단 수집·복제 금지)에 맞춰, 예전에 받아 저장해 둔 트래키파이 데이터를 지운다.
   for (const k of ['sanctions', 'channelCounts', 'userSummaries', 'broadcasts']) deleteState(k).catch(() => {});
+  addPatchNoteSections().catch((e) => console.error('[patch-notes] 추가 실패:', e.message));
   doCrawl('시작 시 초기 크롤링');
   setInterval(() => doCrawl('정기 자동 갱신'), CRAWL_INTERVAL_MS);
 });
