@@ -82,17 +82,34 @@
   ];
 
   var lastText = '';
+
+  // ⭐ 즐겨찾기: 스타일 이름을 이 브라우저에 기억하고, 즐겨찾기한 스타일을 맨 위에 보여준다
+  var favs = [];
+  try { favs = JSON.parse(localStorage.getItem('ucFavs') || '[]') || []; } catch(e) { favs = []; }
+  function saveFavs(){ try { localStorage.setItem('ucFavs', JSON.stringify(favs)); } catch(e) {} }
+  function isFav(i){ return favs.indexOf(STYLES[i][0]) >= 0; }
+  function rowsHTML(){
+    var order = STYLES.map(function(_, i){ return i; });
+    // 즐겨찾기는 누른 순서대로 위에, 나머지는 원래 순서대로
+    var top = favs.map(function(name){ return STYLES.findIndex(function(st){ return st[0] === name; }); }).filter(function(i){ return i >= 0; });
+    order = top.concat(order.filter(function(i){ return top.indexOf(i) < 0; }));
+    return (top.length ? '' : '<div style="font-size:11.5px;color:var(--text-dim);padding:0 2px;">☆를 누르면 자주 쓰는 스타일이 맨 위에 고정돼요.</div>') +
+      order.map(function(i){
+        var on = isFav(i);
+        return '<div class="uc-row'+(on?' fav':'')+'"><button type="button" class="uc-star" data-uc-fav="'+i+'" title="'+(on?'즐겨찾기 빼기':'즐겨찾기')+'">'+(on?'★':'☆')+'</button>'+
+          '<div class="uc-name">'+STYLES[i][0]+'</div><div class="uc-out" id="uc-out-'+i+'"></div>'+
+          '<button type="button" class="btn" data-uc-copy="'+i+'" style="padding:4px 10px;font-size:12px;">복사</button></div>';
+      }).join('');
+  }
+
   window.openUnicodeModal = function(){
-    var rows = STYLES.map(function(st, i){
-      return '<div class="uc-row"><div class="uc-name">'+st[0]+'</div><div class="uc-out" id="uc-out-'+i+'"></div>'+
-        '<button type="button" class="btn" data-uc-copy="'+i+'" style="padding:4px 10px;font-size:12px;">복사</button></div>';
-    }).join('');
+    var rows = rowsHTML();
     document.getElementById('modal-slot').innerHTML =
       '<div class="overlay" data-action="overlay" data-key=""><div class="modal wide" data-stop="1">'+
         '<h3>🔤 유니코드 텍스트 변환기</h3>'+
         '<p style="margin:0;font-size:12px;color:var(--text-dim);line-height:1.5;">글을 입력하면 스타일별로 바뀐 글자가 나와요. 복사해서 채팅·닉네임·공지에 붙여 넣으면 돼요. 대부분은 영어·숫자만 바뀌고, \'한글 가능\' 스타일은 한글에도 돼요. 일부 기기나 채팅창에서는 빈 네모로 보일 수 있어요.</p>'+
         '<textarea id="uc-input" class="rules-edit" style="min-height:70px;" placeholder="예: Lee Sang Ho 2026"></textarea>'+
-        '<div class="uc-list">'+rows+'</div>'+
+        '<div class="uc-list" id="uc-list">'+rows+'</div>'+
         '<div class="modal-actions"><button type="button" class="btn" data-action="close-modal">닫기</button><span></span></div>'+
       '</div></div>';
     var ta = document.getElementById('uc-input');
@@ -126,6 +143,16 @@
 
   document.addEventListener('input', function(ev){ if(ev.target && ev.target.id === 'uc-input') paint(); });
   document.addEventListener('click', function(ev){
+    var star = ev.target.closest && ev.target.closest('[data-uc-fav]');
+    if(star){
+      var name = STYLES[Number(star.getAttribute('data-uc-fav'))][0];
+      var k = favs.indexOf(name);
+      if(k >= 0) favs.splice(k, 1); else favs.push(name);
+      saveFavs();
+      var list = document.getElementById('uc-list');
+      if(list){ var y = list.scrollTop; list.innerHTML = rowsHTML(); paint(); list.scrollTop = k >= 0 ? y : 0; }
+      return;
+    }
     var b = ev.target.closest && ev.target.closest('[data-uc-copy]'); if(!b) return;
     var i = Number(b.getAttribute('data-uc-copy'));
     var out = document.getElementById('uc-out-'+i);
@@ -139,9 +166,12 @@
   var css = document.createElement('style');
   css.textContent =
     '.uc-list{display:flex;flex-direction:column;gap:6px;max-height:52vh;overflow-y:auto;padding-right:2px;}'+
-    '.uc-row{display:grid;grid-template-columns:118px 1fr auto;align-items:center;gap:8px;border:1px solid var(--border);border-radius:10px;padding:7px 9px;background:var(--surface-2);}'+
+    '.uc-row{display:grid;grid-template-columns:auto 118px 1fr auto;align-items:center;gap:8px;border:1px solid var(--border);border-radius:10px;padding:7px 9px;background:var(--surface-2);}'+
+    '.uc-row.fav{border-color:var(--accent);}'+
+    '.uc-star{background:none;border:none;padding:0 2px;font-size:17px;line-height:1;cursor:pointer;color:var(--text-dim);}'+
+    '.uc-row.fav .uc-star{color:#f5c518;}'+
     '.uc-name{font-size:11.5px;color:var(--text-dim);}'+
     '.uc-out{font-size:15px;word-break:break-all;line-height:1.4;min-height:1.4em;}'+
-    '@media (max-width:520px){.uc-row{grid-template-columns:1fr auto;}.uc-name{grid-column:1/-1;}}';
+    '@media (max-width:520px){.uc-row{grid-template-columns:auto 1fr auto;}.uc-name{grid-column:2/-1;}.uc-out{grid-column:2;}}';
   document.head.appendChild(css);
 })();
