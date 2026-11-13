@@ -101,6 +101,7 @@ const DEFAULT_PATCH_NOTES = [
   '[11월 14일]',
   '- 📰 패치 노트 (제재 기준 옆, 매니저가 수정 가능)',
   '- 📢 최근 방송 공지 접기/펼치기 (제목 누르기, 내 브라우저에 기억)',
+  '- 🔤 글자 변환 (메모장 옆, 𝗚𝗘𝗡 같은 꾸민 글자 30가지 · 복사 · ☆ 즐겨찾기)',
   '',
   '[11월 12일]',
   '- 🔒 매니저 로그인 (이름 + 비밀번호, 30일 유지)',
@@ -129,15 +130,38 @@ async function addPatchNoteSections() {
   }
   const fresh = sections.filter((s) => !added.includes(s.head) && !saved.text.includes(s.head));
   const seen = sections.map((s) => s.head);
+  const t = saved.text.split('\n');
+  let changed = false;
   if (fresh.length) {
-    const t = saved.text.split('\n');
     const at = t.length > 1 && t[1] === '' ? 2 : 0; // 첫 줄 제목 아래
     t.splice(at, 0, ...fresh.map((s) => s.body + '\n').join('\n').split('\n'));
-    await setState('patchNotes', { text: t.join('\n'), updatedAt: Date.now() });
+    changed = true;
     console.log('[patch-notes] 추가:', fresh.map((s) => s.head).join(', '));
   }
+
+  // 이미 들어간 날짜 묶음에 나중에 줄이 더 생기면, 그 줄만 묶음 끝에 한 번 끼워 넣는다.
+  // (넣은 줄은 patchNotesAddedLines에 적어 두어, 매니저가 지워도 다시 넣지 않는다.
+  //  처음 한 번은 이 기능 전에 이미 있던 줄들을 '넣은 것'으로 쳐서 지운 줄이 되살아나지 않게 한다)
+  const allLines = sections.flatMap((s) => s.body.split('\n').slice(1));
+  let addedLines = await getState('patchNotesAddedLines', null);
+  if (!Array.isArray(addedLines)) addedLines = allLines.filter((l) => !PATCH_LINES_AFTER_LINE_TRACKING.includes(l));
+  for (const s of sections) {
+    if (fresh.includes(s)) continue;
+    const hi = t.indexOf(s.head);
+    if (hi < 0) continue; // 매니저가 묶음째 지운 경우
+    let end = hi + 1;
+    while (end < t.length && t[end] !== '' && !/^\[.+\]$/.test(t[end])) end++;
+    const missing = s.body.split('\n').slice(1).filter((l) => !addedLines.includes(l) && !t.includes(l));
+    if (missing.length) { t.splice(end, 0, ...missing); changed = true; console.log('[patch-notes] 줄 추가:', s.head, missing.length + '줄'); }
+  }
+  if (changed) await setState('patchNotes', { text: t.join('\n'), updatedAt: Date.now() });
+  if (allLines.some((l) => !addedLines.includes(l))) await setState('patchNotesAddedLines', [...new Set([...addedLines, ...allLines])]);
   if (seen.some((h) => !added.includes(h))) await setState('patchNotesAdded', [...new Set([...added, ...seen])]);
 }
+// 줄 단위로 챙기기 시작한 뒤에 새로 생긴 줄 (이 줄들만 처음 한 번 끼워 넣는다)
+const PATCH_LINES_AFTER_LINE_TRACKING = [
+  '- 🔤 글자 변환 (메모장 옆, 𝗚𝗘𝗡 같은 꾸민 글자 30가지 · 복사 · ☆ 즐겨찾기)',
+];
 
 app.post('/api/patch-notes', async (req, res) => {
   const { text } = req.body || {};
