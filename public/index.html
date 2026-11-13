@@ -210,6 +210,7 @@
 <body>
 <div id="app"><div style="padding:40px;text-align:center;color:var(--text-dim);">불러오는 중…</div></div>
 <script src="/auth.js"></script>
+<script src="/unicode.js"></script>
 <script>
 (function(){
   "use strict";
@@ -421,7 +422,7 @@
       '</form>';
     }
     return '<section class="card">'+
-      '<h2 style="font-weight:800;font-size:17px;margin:0 0 10px;">메모장'+helpBtn('memo')+'</h2>'+
+      '<h2 style="font-weight:800;font-size:17px;margin:0 0 10px;">메모장'+helpBtn('memo')+'<button type="button" class="btn" data-action="open-unicode" title="유니코드 텍스트 변환기" style="margin-left:7px;padding:2px 9px;font-size:12px;vertical-align:middle;">🔤 글자 변환</button></h2>'+
       helpText('memo', '일정, CK, 매크로 등 페이지별로 나눠 적어두는 메모장입니다. 같이 쓰는 사람 모두에게 보입니다. 탭은 끌어서(또는 ◀ ▶ 버튼으로) 순서를 바꿀 수 있어요.')+
       '<div class="memo-tabs">'+tabs+'</div>'+body+
     '</section>';
@@ -1000,6 +1001,7 @@
     if(action==='memo-add'){ stashMemoDraft(); openMemoPageModal(null); return; }
     if(action==='memo-rename'){ var mp=(STATE.memos||[]).find(function(x){return x.id===el.getAttribute('data-id');}); if(mp) openMemoPageModal(mp); return; }
     if(action==='logout'){ if(confirm('로그아웃할까요?')) api('POST','/api/logout').then(function(){ location.href='/login.html'; }); return; }
+    if(action==='open-unicode'){ if(window.openUnicodeModal) window.openUnicodeModal(); return; }
     if(action==='notices-toggle'){ NOTICE_OPEN=!NOTICE_OPEN; try{ localStorage.setItem('noticesOpen', NOTICE_OPEN?'1':'0'); }catch(e){} stashMemoDraft(); render(); return; }
     if(action==='adm-toggle'){ ADM.open=!ADM.open; stashMemoDraft(); render(); if(ADM.open) loadAdmin(); return; }
     if(action==='adm-tab'){ ADM.tab=el.getAttribute('data-tab'); stashMemoDraft(); render(); loadAdmin(); return; }
