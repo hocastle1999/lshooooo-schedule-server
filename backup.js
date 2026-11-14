@@ -10,8 +10,8 @@ const audit = require('./audit');
 const auth = require('./auth');
 
 const INDEX_KEY = 'backups';
-const KEYS = ['events', 'unscheduled', 'memos', 'sanctionRules', 'watchlist'];
-const LABELS = { events: '일정', unscheduled: '날짜 미정 일정', memos: '메모장', sanctionRules: '제재 기준', watchlist: '주의 시청자' };
+const KEYS = ['events', 'unscheduled', 'memos', 'sanctionRules', 'watchlist', 'bannedWords'];
+const LABELS = { events: '일정', unscheduled: '날짜 미정 일정', memos: '메모장', sanctionRules: '제재 기준', watchlist: '주의 시청자', bannedWords: '금지 단어' };
 const KEEP = { auto: 7, manual: 5, 'before-restore': 3 };
 const CHECK_EVERY_MS = 60 * 60 * 1000;
 

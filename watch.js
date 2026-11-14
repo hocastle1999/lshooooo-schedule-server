@@ -378,6 +378,12 @@ async function chatSave() {
   try { await setState(CHAT_KEY, chatLog); } catch (e) { chatDirty = true; console.error('[watch] 채팅 기록 저장 실패:', e.message); }
 }
 
+// ---- 금지 단어 ----
+// 매니저가 등록한 단어가 들어간 채팅을 모아 둔 채팅 기록(chatLog)에서 찾는다. 띄어쓰기·대소문자는 무시한다.
+const BW_KEY = 'bannedWords';
+let bannedWords = []; // [{ w, at }]
+const bwNorm = (s) => String(s || '').toLowerCase().replace(/\s+/g, '');
+
 function onChat(c) {
   if (c.userId && c.nickname) nickNow.set(c.userId, c.nickname);
   if (c.userId && c.message) {
@@ -491,6 +497,8 @@ function ensureLoaded() {
       if (Array.isArray(wl)) { watchlist = wl; wlRebuild(); }
       const wa = await getState(WL_ALERTS_KEY, null);
       if (wa && Array.isArray(wa.alerts)) { wlAlerts = wa.alerts; wlSeq = wa.seq || 0; }
+      const bw = await getState(BW_KEY, []);
+      if (Array.isArray(bw)) bannedWords = bw;
       const cl = await getState(CHAT_KEY, []);
       if (Array.isArray(cl)) { chatLog = cl.concat(chatLog).sort((a, b) => a[0] - b[0]); chatTrim(); }
       const saved = await getState(SANCTIONS_KEY, null);
@@ -956,6 +964,69 @@ function mount(app) {
     res.json(out);
   });
 
+  // 금지 단어 목록 + 그 단어를 친 시청자·채팅. word 를 주면 그 단어만, 없으면 모든 금지 단어.
+  async function bwView(word) {
+    const present = chatStatus.state === 'live' ? presentUsers() : new Map();
+    const keys = bannedWords.map((b) => bwNorm(b.w)).filter(Boolean);
+    const counts = new Map(keys.map((k) => [k, 0]));
+    const only = word ? bwNorm(word) : '';
+    const people = new Map(); // id → { id, nick, count, words:Set, last }
+    const list = [];
+    let total = 0;
+    for (let i = chatLog.length - 1; i >= 0; i--) {
+      const r = chatLog[i];
+      const m = bwNorm(r[3]);
+      const hit = keys.filter((k) => m.includes(k));
+      if (!hit.length) continue;
+      for (const k of hit) counts.set(k, counts.get(k) + 1);
+      if (only && !hit.includes(only)) continue;
+      total++;
+      let p = people.get(r[1]);
+      if (!p) { p = { id: r[1], nick: r[2] || r[1], count: 0, words: new Set(), last: r[0] }; people.set(r[1], p); }
+      p.count++;
+      hit.forEach((k) => p.words.add(k));
+      if (list.length < 300) list.push({ ts: r[0], id: r[1], nick: r[2] || r[1], message: r[3], words: hit });
+    }
+    const decorate = (it) => {
+      it.nickNow = nickInfo(it.id, it.nick).nick;
+      it.inRoom = present.has(it.id);
+      it.watched = watchSet.has(it.id);
+      return it;
+    };
+    return {
+      status: chatStatus,
+      stored: chatLog.length,
+      since: chatLog.length ? chatLog[0][0] : 0,
+      word: only,
+      words: bannedWords.map((b) => ({ w: b.w, at: b.at, count: counts.get(bwNorm(b.w)) || 0 })),
+      total,
+      people: [...people.values()].sort((a, b) => b.count - a.count || b.last - a.last).slice(0, 200)
+        .map((p) => decorate({ ...p, words: [...p.words] })),
+      list: list.map(decorate),
+    };
+  }
+  app.get('/api/banned-words', async (req, res) => {
+    await ensureLoaded();
+    res.json(await bwView(String(req.query.word || '')));
+  });
+  app.post('/api/banned-words', async (req, res) => {
+    await ensureLoaded();
+    const w = String((req.body || {}).word || '').trim().slice(0, 50);
+    if (!bwNorm(w)) return res.status(400).json({ error: '금지 단어를 입력해주세요' });
+    if (bannedWords.some((b) => bwNorm(b.w) === bwNorm(w))) return res.status(409).json({ error: '이미 있는 금지 단어예요' });
+    if (bannedWords.length >= 300) return res.status(400).json({ error: '금지 단어는 300개까지예요' });
+    bannedWords.push({ w, at: Date.now() });
+    await setState(BW_KEY, bannedWords);
+    res.json({ ok: true, ...(await bwView('')) });
+  });
+  app.delete('/api/banned-words/:word', async (req, res) => {
+    await ensureLoaded();
+    const k = bwNorm(req.params.word);
+    bannedWords = bannedWords.filter((b) => bwNorm(b.w) !== k);
+    await setState(BW_KEY, bannedWords);
+    res.json({ ok: true, ...(await bwView('')) });
+  });
+
   app.get('/api/watch', async (req, res) => {
     await ensureLoaded();
     const days = Math.min(KEEP_DAYS, Math.max(1, parseInt(req.query.days, 10) || 30));
@@ -969,6 +1040,8 @@ async function reloadWatchlist() {
   const wl = await getState(WL_KEY, []);
   watchlist = Array.isArray(wl) ? wl : [];
   wlRebuild();
+  const bw = await getState(BW_KEY, []);
+  bannedWords = Array.isArray(bw) ? bw : [];
 }
 
 module.exports = { mount, resume, managers, onPacket, resyncManagers, reloadWatchlist };

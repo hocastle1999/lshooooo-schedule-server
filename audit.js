@@ -86,6 +86,8 @@ async function describe(req) {
   if (m === 'POST' && p === '/api/roulette/stop') return ['후원 룰렛 수집 중지', ''];
   if (m === 'POST' && p === '/api/roulette/reset') return ['후원 룰렛 명단 초기화', ''];
   if (m === 'POST' && p === '/api/roulette/filter') return ['후원 룰렛 설정 변경', `기준 ${b.unit || 1}개${b.bonus === false ? '' : ' · 보너스'}`, true];
+  if (m === 'POST' && p === '/api/banned-words') return ['금지 단어 추가', short(b.word, 30)];
+  if (m === 'DELETE' && (x = p.match(/^\/api\/banned-words\/(.+)$/))) return ['금지 단어 빼기', short(decodeURIComponent(x[1]), 30)];
   if (m === 'POST' && p === '/api/watchlist') return ['주의 시청자 추가', short(b.q) + (b.memo ? ` (${short(b.memo, 30)})` : '')];
   if (m === 'DELETE' && p === '/api/watchlist/alerts') return ['채팅 알림 전체 지우기', ''];
   if (m === 'DELETE' && p.startsWith('/api/watchlist/alerts/')) return ['채팅 알림 지우기', '', true];
