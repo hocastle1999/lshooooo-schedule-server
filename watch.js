@@ -356,8 +356,35 @@ function wlSaveSoon() {
     } catch (e) { console.error('[watch] 주의 시청자 저장 실패:', e.message); }
   }, 3000);
 }
+// ---- 채팅 기록 (참여자 검색 → 채팅 검색) ----
+// 채팅 내용으로 누가 쳤는지 찾을 수 있게 최근 채팅을 모아 둔다. [ts, id, nick, message]
+// 최근 7일 · 최대 20000줄만, 2분마다 저장소에 저장 (서버가 다시 켜져도 남게).
+const CHAT_KEY = 'chatLog';
+const CHAT_MAX = 20000;
+const CHAT_KEEP_MS = 7 * 24 * 3600 * 1000;
+let chatLog = [];
+let chatDirty = false;
+function chatTrim() {
+  const cut = Date.now() - CHAT_KEEP_MS;
+  let i = 0;
+  while (i < chatLog.length && chatLog[i][0] < cut) i++;
+  if (i) chatLog = chatLog.slice(i);
+  if (chatLog.length > CHAT_MAX) chatLog = chatLog.slice(-CHAT_MAX);
+}
+async function chatSave() {
+  if (!chatDirty) return;
+  chatDirty = false;
+  chatTrim();
+  try { await setState(CHAT_KEY, chatLog); } catch (e) { chatDirty = true; console.error('[watch] 채팅 기록 저장 실패:', e.message); }
+}
+
 function onChat(c) {
   if (c.userId && c.nickname) nickNow.set(c.userId, c.nickname);
+  if (c.userId && c.message) {
+    chatLog.push([c.ts || Date.now(), normId(c.userId), c.nickname || '', String(c.message).slice(0, 300)]);
+    if (chatLog.length > CHAT_MAX + 1000) chatTrim();
+    chatDirty = true;
+  }
   if (!watchSet.has(c.userId)) return;
   const w = watchlist.find((x) => x.id === c.userId);
   if (w) { w.lastChatAt = c.ts; if (c.nickname) w.nick = c.nickname; }
@@ -381,6 +408,8 @@ function startChat() {
   chat.on('packet', onPacket);
   keepAwake.acquire('watch');
   setInterval(resyncManagers, RESYNC_MS);
+  setInterval(chatSave, 2 * 60 * 1000);
+  for (const sig of ['SIGTERM', 'SIGINT']) process.once(sig, () => { chatSave().finally(() => process.exit(0)); setTimeout(() => process.exit(0), 5000); });
   // 트래키파이 제재 기록 갱신은 끔 (TRACKIFY_OFF)
   if (!TRACKIFY_OFF) { setInterval(syncSanctions, SYNC_EVERY_MS); syncSanctions(); }
 }
@@ -462,6 +491,8 @@ function ensureLoaded() {
       if (Array.isArray(wl)) { watchlist = wl; wlRebuild(); }
       const wa = await getState(WL_ALERTS_KEY, null);
       if (wa && Array.isArray(wa.alerts)) { wlAlerts = wa.alerts; wlSeq = wa.seq || 0; }
+      const cl = await getState(CHAT_KEY, []);
+      if (Array.isArray(cl)) { chatLog = cl.concat(chatLog).sort((a, b) => a[0] - b[0]); chatTrim(); }
       const saved = await getState(SANCTIONS_KEY, null);
       if (saved && (typeof saved.rows === 'string' || Array.isArray(saved.items))) {
         sanctions = {
@@ -897,6 +928,31 @@ function mount(app) {
         sanctionsAll: { total: kAll + mAll, kicks: kAll, mutes: mAll },
       };
     });
+    res.json(out);
+  });
+
+  // 채팅 내용으로 친 사람 찾기 (참여자 검색 페이지의 '채팅 검색'). 최신순, 최대 200줄.
+  app.get('/api/chat/search', async (req, res) => {
+    await ensureLoaded();
+    const q = String(req.query.q || '').trim().toLowerCase().slice(0, 100);
+    const present = chatStatus.state === 'live' ? presentUsers() : new Map();
+    const out = { status: chatStatus, q, stored: chatLog.length, since: chatLog.length ? chatLog[0][0] : 0, total: 0, people: 0, list: [] };
+    if (!q) return res.json(out);
+    const ids = new Set();
+    for (let i = chatLog.length - 1; i >= 0; i--) {
+      const r = chatLog[i];
+      if (!r[3].toLowerCase().includes(q)) continue;
+      out.total++;
+      ids.add(r[1]);
+      if (out.list.length < 200) out.list.push({ ts: r[0], id: r[1], nick: r[2] || r[1], message: r[3] });
+    }
+    out.people = ids.size;
+    for (const it of out.list) {
+      const ni = nickInfo(it.id, it.nick);
+      it.nickNow = ni.nick; // 그 뒤 닉네임을 바꿨으면 지금 닉네임
+      it.inRoom = present.has(it.id);
+      it.watched = watchSet.has(it.id);
+    }
     res.json(out);
   });
 
