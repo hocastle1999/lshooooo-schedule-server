@@ -589,13 +589,11 @@
       var why = m.state==='offline' ? '방송 꺼짐' : '방송 확인 중…';
       return '<div class="mgr off"><span class="mgr-dot"></span><span class="mgr-count">매니저 · '+why+'</span></div>';
     }
-    var MAX = 8;
-    var chips = m.list.slice(0, MAX).map(function(u){
+    // 몇 명이든 모두 보여준다 (넘치면 다음 줄로)
+    var chips = m.list.map(function(u){
       var tip = u.id + (u.joinedAt ? ' · ' + new Date(u.joinedAt).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) + ' 부터' : '');
       return '<span class="mgr-chip" title="'+esc(tip)+'">'+esc(u.nick || u.id)+'</span>';
     }).join('');
-    var rest = m.list.slice(MAX);
-    if(rest.length) chips += '<span class="mgr-chip more" title="'+esc(rest.map(function(u){return u.nick||u.id;}).join(', '))+'">+'+rest.length+'</span>';
     return '<div class="mgr"><span class="mgr-dot"></span><span class="mgr-count">방송 참여 중 매니저 <b>'+m.list.length+'</b>명</span>'+(chips?'<span class="mgr-chips">'+chips+'</span>':'')+'</div>';
   }
 
