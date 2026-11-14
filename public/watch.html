@@ -180,10 +180,6 @@
   .feed-clear:hover{border-color:var(--danger);color:var(--danger);}
   .hx-watch{font:inherit;font-size:12px;font-weight:700;border:1px solid var(--border);background:var(--surface-2);color:var(--text);border-radius:8px;padding:4px 9px;cursor:pointer;}
   .hx-watch.on{border-color:var(--warm);color:var(--warm);background:var(--warm-soft);}
-  .bw-cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:18px;margin:18px 0;align-items:start;}
-  .bw-scroll{max-height:68vh;overflow-y:auto;padding-right:4px;}
-  .bw-cols .vrow{padding:8px 10px;}
-  @media (max-width:820px){ .bw-cols{grid-template-columns:minmax(0,1fr);} }
   .bw-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;}
   .bw-chip{display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:999px;background:var(--surface-2);overflow:hidden;}
   .bw-chip button{font:inherit;font-size:13px;font-weight:700;background:none;border:none;color:var(--text);padding:5px 4px 5px 11px;cursor:pointer;}
@@ -365,22 +361,11 @@
       <div class="bw-chips" id="bwChips"></div>
     </section>
 
-    <!-- 왼쪽: 친 시청자 │ 오른쪽: 들어간 채팅 (좁은 화면에서는 위아래) -->
-    <div class="bw-cols">
-    <section class="card">
-      <h2>금지 단어를 친 시청자 <span class="badge" id="bwBadge">0명</span></h2>
-      <div class="stats" id="bwStats"></div>
-      <div class="vlist bw-scroll" id="bwPeople"><div class="vempty">불러오는 중…</div></div>
-    </section>
-
     <section class="card">
       <h2>금지 단어가 들어간 채팅</h2>
-      <div class="feed bw-scroll" id="bwList"></div>
-    </section>
-    </div>
-
-    <section class="card">
-      <div class="hint" style="margin:0">
+      <div class="stats" id="bwStats"></div>
+      <div class="feed" id="bwList"><div class="vempty">불러오는 중…</div></div>
+      <div class="hint">
         이상호 방송 채팅방에서 최근 7일 동안 친 채팅(최대 2만 줄)에서 찾아요. 서버가 채팅방에 들어가 있는 동안 받은 채팅만 있어요.
         위의 단어를 누르면 그 단어만 보고, 다시 누르면 전체를 봐요. 금지 단어 목록은 매니저 모두가 같이 써요. 닉네임·아이디를 누르면 복사돼요.
       </div>
@@ -972,18 +957,9 @@
         '<button type="button" class="bw-x" data-bw-del="' + esc(x.w) + '" title="금지 단어에서 빼기">✕</button></span>';
     }).join('') : '<span class="hint" style="margin:0">아직 금지 단어가 없어요. 위에서 추가해주세요.</span>';
     $('bwStats').innerHTML = '<span>모아 둔 채팅 <b>' + fmt(d.stored) + '</b>줄' + (d.since ? ' (' + dayHm(d.since) + '부터)' : '') + '</span>' +
-      '<span>' + (bwWord ? '“' + esc(bwWord) + '” ' : '금지 단어 ') + '채팅 <b>' + fmt(d.total) + '</b>줄</span>';
-    $('bwBadge').textContent = d.people.length + '명';
+      '<span>' + (bwWord ? '“' + esc(bwWord) + '” ' : '금지 단어 ') + '채팅 <b>' + fmt(d.total) + '</b>줄 · 친 사람 <b>' + fmt(d.people.length) + '</b>명</span>';
     var keys = bwWord ? [bwWord] : known;
-    $('bwPeople').innerHTML = !d.words.length ? '<div class="vempty">금지 단어를 추가하면 그 단어를 친 시청자가 여기에 나와요.</div>'
-      : d.people.length ? d.people.map(function(p){
-        return '<div class="vrow">' + whoHTML(p) +
-          '<span class="tag k">' + fmt(p.count) + '번</span>' +
-          '<span class="tag" title="걸린 금지 단어">' + esc(p.words.join(', ')) + '</span>' +
-          '<span class="tag" title="마지막으로 친 시각">마지막 ' + dayHm(p.last) + '</span>' +
-        '</div>';
-      }).join('') : '<div class="vempty">아직 금지 단어를 친 시청자가 없어요.</div>';
-    $('bwList').innerHTML = d.list.length ? d.list.map(function(c){
+    $('bwList').innerHTML = !d.words.length ? '<div class="vempty">금지 단어를 추가하면 그 단어가 들어간 채팅이 여기에 나와요.</div>' : d.list.length ? d.list.map(function(c){
       return '<div class="feed-row">' +
         '<span class="t">' + dayHm(c.ts) + '</span>' +
         '<span class="who">' + whoHTML(c) + '</span>' +
@@ -1026,7 +1002,7 @@
     var pick = e.target.closest('[data-bw-pick]');
     if (pick) { var k = pick.getAttribute('data-bw-pick'); bwWord = bwWord === k ? '' : k; bwLoad(); }
   });
-  ['bwPeople', 'bwList'].forEach(function(id){
+  ['bwList'].forEach(function(id){
     $(id).addEventListener('click', function(e){
       var btn = e.target.closest('[data-copy]'); if (!btn) return;
       var text = btn.getAttribute('data-copy');
