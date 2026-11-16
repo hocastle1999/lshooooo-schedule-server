@@ -18,7 +18,6 @@ SOOP 스트리머 **이상호(lshooooo)** 방송 매니저들이 같이 쓰는 �
 | 방송 일정 달력 | 날짜를 눌러 일정 추가·수정·삭제. 일요일은 빨강, 토요일은 파랑 |
 | 방송 여부 표시 | 날짜 옆에 방송한 날 🔵, 안 한 날 ❌ (트래키파이 방송 기록, 그날 30분 이상 방송했으면 🔵, 24시간마다 갱신) |
 | 날짜 미정 일정 | 날짜가 안 정해진 일정을 적어 두고 📅 버튼으로 달력에 배정 |
-| 롤 월즈 일정·결과 | 네이버 e스포츠에서 자동으로 가져옴 |
 | 메모장 | 일정·CK·매크로 등 페이지(탭)별 메모, 자동 저장. 탭은 끌어서(휴대폰은 ◀ ▶) 순서 변경 |
 | 첨부 파일 | 파일 1개당 5MB까지 올려 두고 같이 내려받기 |
 | 최근 방송 공지 | 방송국 게시판 공지를 2시간마다 자동 크롤링, `⟳ 공지 새로고침`으로 즉시 갱신 |
@@ -72,7 +71,6 @@ SOOP 스트리머 **이상호(lshooooo)** 방송 매니저들이 같이 쓰는 �
 | 사람별 제재 이력(🔍) | 트래키파이 유저 제재 API | 2분 캐시 |
 | 방송 기록(🔵/❌) | 트래키파이 방송 API | 지난달은 1번, 이번 달은 24시간마다 |
 | 공지 | SOOP 방송국 게시판 크롤링 (Playwright) | 2시간마다 |
-| 롤 월즈 | 네이버 e스포츠 크롤링 | 2시간마다 |
 
 ### 채팅 연결
 
@@ -96,7 +94,6 @@ SOOP 스트리머 **이상호(lshooooo)** 방송 매니저들이 같이 쓰는 �
 server.js        Express 서버, 일정·메모·첨부·공지·제재 기준 API, 모듈 연결
 store.js         저장소 (Upstash Redis, 없으면 data/*.json)
 crawler.js       방송국 게시판 공지 크롤링
-worlds.js        네이버 e스포츠 롤 월즈 일정 크롤링
 broadcasts.js    트래키파이 방송 기록 → 날짜별 방송 여부
 roulette.js      후원 룰렛 명단 (채팅 후원 수집·배수 계산)
 watch.js         참여자 목록·매니저 표시·제재 이력·제재 순위
@@ -114,7 +111,7 @@ public/
 
 | 경로 | 설명 |
 |---|---|
-| `GET /api/state` | 일정·공지·메모·첨부·월즈·제재 기준·매니저 (작업실이 20초마다 호출) |
+| `GET /api/state` | 일정·공지·메모·첨부·제재 기준·패치 노트·매니저 (작업실이 20초마다 호출) |
 | `GET /api/managers` | 방송 참여 중 매니저 (5초마다 호출) |
 | `GET /api/broadcasts?from&to` | 날짜별 방송 여부 |
 | `GET /api/roulette` · `POST /api/roulette/start·stop·filter·reset` · `GET /api/roulette/log.csv` | 후원 룰렛 |
@@ -125,7 +122,7 @@ public/
 
 ### 저장소 키 (Upstash)
 
-`events`, `unscheduled`, `memos`, `files`·`file_<id>`, `notices`, `meta`, `worlds`, `sanctionRules`, `roulette`, `roulette_log`, `sanctions`(제재 기록, 탭으로 나눈 문자열), `broadcasts`, `channelCounts`, `userSummaries`
+`events`, `unscheduled`, `memos`, `files`·`file_<id>`, `notices`, `meta`, `sanctionRules`, `patchNotes`, `roulette`, `roulette_log`, `sanctions`(제재 기록, 탭으로 나눈 문자열), `broadcasts`, `channelCounts`, `userSummaries`
 
 ---
 

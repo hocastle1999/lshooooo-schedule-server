@@ -1,7 +1,6 @@
 const express = require('express');
 const path = require('path');
 const { runCrawl } = require('./crawler');
-const { runWorldsCrawl } = require('./worlds');
 const { getState, setState, deleteState } = require('./store');
 const roulette = require('./roulette');
 const watch = require('./watch');
@@ -46,19 +45,18 @@ app.get('/api/managers', (req, res) => res.json(watch.managers()));
 
 app.get('/api/state', async (req, res) => {
   const sanctionRules = await loadSanctionRules(); // 메모장에서 옮겨오는 일이 있어서 memos 보다 먼저
-  const [events, notices, unscheduled, memos, meta, files, worlds] = await Promise.all([
+  const [events, notices, unscheduled, memos, meta, files] = await Promise.all([
     getState('events', {}),
     getState('notices', []),
     getState('unscheduled', []),
     loadMemos(),
     getState('meta', DEFAULT_META),
     getState('files', []),
-    getState('worlds', { matches: [], updatedLabel: '', sourceUrl: '' }),
   ]);
   // files에는 이름/크기/날짜 같은 목록 정보만 있고, 파일 내용 자체는 따로 저장되어 있습니다
   // (20초마다 이 API를 부르기 때문에 파일 내용을 같이 보내면 안 됩니다).
   const patchNotes = await getState('patchNotes', { text: DEFAULT_PATCH_NOTES, updatedAt: 0 });
-  res.json({ events, notices, unscheduled, memos, meta, files, worlds, sanctionRules, patchNotes, managers: watch.managers() });
+  res.json({ events, notices, unscheduled, memos, meta, files, sanctionRules, patchNotes, managers: watch.managers() });
 });
 
 // ---- 메모장 (여러 페이지) ----
@@ -389,21 +387,6 @@ app.delete('/api/files/:id', async (req, res) => {
 
 let crawling = false;
 
-// 롤 월즈 일정/결과 갱신. 실패하거나 0개면 기존 데이터를 그대로 둡니다.
-async function doWorldsCrawl(reason) {
-  try {
-    const result = await runWorldsCrawl();
-    if (result.matches.length > 0) {
-      await setState('worlds', result);
-      console.log(`[worlds] (${reason}) 경기 ${result.matches.length}개 갱신 - ${result.updatedLabel}`);
-    } else {
-      console.log(`[worlds] (${reason}) 가져온 경기가 0개라서 기존 데이터를 유지합니다.`);
-    }
-  } catch (e) {
-    console.error(`[worlds] (${reason}) 실패:`, e.message);
-  }
-}
-
 async function doCrawl(reason) {
   if (crawling) return { skipped: true };
   crawling = true;
@@ -421,8 +404,6 @@ async function doCrawl(reason) {
       console.error(`[crawler] (${reason}) 실패:`, e.message);
       result = { ok: false, error: e.message };
     }
-    // 공지 크롤링이 실패해도 월즈 일정은 따로 시도합니다 (브라우저는 하나씩 차례로 실행).
-    await doWorldsCrawl(reason);
     return result;
   } finally {
     crawling = false;
@@ -446,7 +427,8 @@ app.listen(PORT, () => {
   watch.resume().catch((e) => console.error('[watch] 복구 실패:', e.message));
   backup.start({ onRestore: () => watch.reloadWatchlist() });
   // 트래키파이 약관(무단 수집·복제 금지)에 맞춰, 예전에 받아 저장해 둔 트래키파이 데이터를 지운다.
-  for (const k of ['sanctions', 'channelCounts', 'userSummaries', 'broadcasts']) deleteState(k).catch(() => {});
+  // 롤 월즈가 끝나서 월즈 일정·결과(worlds)도 지운다.
+  for (const k of ['sanctions', 'channelCounts', 'userSummaries', 'broadcasts', 'worlds']) deleteState(k).catch(() => {});
   addPatchNoteSections().catch((e) => console.error('[patch-notes] 추가 실패:', e.message));
   doCrawl('시작 시 초기 크롤링');
   setInterval(() => doCrawl('정기 자동 갱신'), CRAWL_INTERVAL_MS);
