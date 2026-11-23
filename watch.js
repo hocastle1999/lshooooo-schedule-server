@@ -939,7 +939,38 @@ function mount(app) {
     res.json(out);
   });
 
-  // 채팅 내용으로 친 사람 찾기 (참여자 검색 페이지의 '채팅 검색'). 최신순, 최대 200줄.
+  // 채팅 기록 안내 (참여자 검색 페이지의 ! 버튼): 저장 기간·최대 줄 수·지금 모인 양
+  function chatInfo() {
+    return { keepDays: Math.round(CHAT_KEEP_MS / 86400000), max: CHAT_MAX, stored: chatLog.length, since: chatLog.length ? chatLog[0][0] : 0, status: chatStatus };
+  }
+  app.get('/api/chat/info', async (req, res) => {
+    await ensureLoaded();
+    res.json(chatInfo());
+  });
+  // 한 시청자가 최근에 친 채팅 (💬 버튼). 최신순, 최대 500줄. 금지 단어가 들어간 줄은 화면에서 강조한다.
+  app.get('/api/chat/user', async (req, res) => {
+    await ensureLoaded();
+    const id = normId(String(req.query.id || '').trim());
+    if (!id) return res.status(400).json({ error: '아이디가 필요해요' });
+    const list = [];
+    let total = 0;
+    for (let i = chatLog.length - 1; i >= 0; i--) {
+      const r = chatLog[i];
+      if (r[1] !== id) continue;
+      total++;
+      if (list.length < 500) list.push({ ts: r[0], nick: r[2] || id, message: r[3] });
+    }
+    const ni = nickInfo(id, list[0] && list[0].nick);
+    const present = chatStatus.state === 'live' ? presentUsers() : new Map();
+    res.json({
+      ...chatInfo(),
+      id, nick: ni.nick, prevNick: ni.prev, inRoom: present.has(id), watched: watchSet.has(id),
+      total, list,
+      banned: bannedWords.map((b) => bwNorm(b.w)).filter(Boolean),
+    });
+  });
+
+  // 채팅 내용으로 친 사람 찾기 (예전 '채팅 검색' 탭, 지금은 화면에서 안 씀). 최신순, 최대 200줄.
   app.get('/api/chat/search', async (req, res) => {
     await ensureLoaded();
     const q = String(req.query.q || '').trim().toLowerCase().slice(0, 100);

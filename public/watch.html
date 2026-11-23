@@ -81,6 +81,8 @@
   .copy.done{border-color:var(--ok);color:var(--ok);}
   .mag{font:inherit;font-size:12px;line-height:1;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:3px 5px;margin-left:5px;cursor:pointer;vertical-align:1px;}
   .mag:hover{border-color:var(--accent);}
+  .page-tab.info-btn{margin-left:auto;width:36px;padding:8px 0;font-weight:800;color:var(--accent);}
+  .feed-row.banned{background:var(--danger-soft);border-radius:8px;}
   .hx-overlay{position:fixed;inset:0;background:rgba(10,12,14,.55);display:flex;align-items:center;justify-content:center;padding:16px;z-index:40;}
   .hx{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);width:100%;max-width:560px;max-height:86vh;display:flex;flex-direction:column;}
   .hx-head{display:flex;align-items:center;gap:6px 8px;flex-wrap:wrap;padding:16px 16px 10px;border-bottom:1px solid var(--border);}
@@ -228,6 +230,7 @@
     <button type="button" class="page-tab" data-page="4"><span class="n">1</span>참여자 검색</button>
     <button type="button" class="page-tab" data-page="5"><span class="n">2</span>주의 시청자<span class="cnt" id="wlCnt" hidden></span></button>
     <button type="button" class="page-tab" data-page="6"><span class="n">3</span>금지 단어</button>
+    <button type="button" class="page-tab info-btn" id="chatInfoBtn" title="채팅 기록 안내 (저장 기간·줄 수)" aria-label="채팅 기록 안내">!</button>
   </div>
 
   <div id="page1">
@@ -345,7 +348,7 @@
       <div class="vlist" id="vList"><div class="vempty">찾을 아이디나 닉네임을 입력해주세요.</div></div>
       <div class="hint">
         지금 방송에 들어와 있는 시청자를 찾아요 (로그인한 시청자만). 정확히 같은 것 → 앞부분이 같은 것 → 들어 있는 것 순서로 최대 100명까지 보여요.
-        닉네임·아이디를 누르면 복사되고, 🔍를 누르면 제재 이력이 보여요. 제재 숫자는 이상호 방송 기준이에요.
+        닉네임·아이디를 누르면 복사되고, 💬를 누르면 그 시청자의 최근 채팅이 보여요 (저장 기간·줄 수는 위 ! 버튼).
       </div>
     </section>
   </div>
@@ -391,7 +394,7 @@
     <section class="card">
       <h2>주의 시청자 <span class="badge" id="wlBadge">0명</span></h2>
       <div class="vlist" id="wlList"><div class="vempty">불러오는 중…</div></div>
-      <div class="hint">목록은 매니저 모두가 같이 써요. 메모를 누르면 고칠 수 있고, 🔍로 제재 이력을 볼 수 있어요. 🔍 창의 ⭐ 버튼으로도 추가·해제할 수 있어요.</div>
+      <div class="hint">목록은 매니저 모두가 같이 써요. 메모를 누르면 고칠 수 있고, 💬로 그 시청자의 최근 채팅을 볼 수 있어요.</div>
     </section>
 
     <section class="card">
@@ -630,7 +633,8 @@
   // ---- 🔍 한 사람의 제재 이력 (최근 90일) ----
   // period: 🔍를 누른 화면이 보고 있던 기간 ('7'·'30'·'90'·'all'). 창 안에서 같은 기간 숫자를 강조한다.
   function magBtn(id, nick, period){
-    return ''; // 제재 이력 조회(트래키파이)는 꺼짐
+    // 제재 이력 조회(트래키파이)는 꺼짐 → 그 자리에 💬 최근 채팅 보기
+    return '<button type="button" class="mag" data-chats="' + esc(id) + '" data-nick="' + esc(nick || '') + '" title="최근 채팅 보기" aria-label="최근 채팅 보기">💬</button>';
     return '<button type="button" class="mag" data-hist="' + esc(id) + '" data-nick="' + esc(nick) + '" data-period="' + esc(period || '') + '" title="제재 이력 보기" aria-label="제재 이력 보기">🔍</button>';
   }
   // 같은 아이디가 닉네임을 바꿨으면 바로 직전 닉네임 하나만 작게 붙인다
@@ -781,7 +785,65 @@
     });
     show();
   }
+  // ---- 💬 한 시청자의 최근 채팅 / ! 채팅 기록 안내 ----
+  function chatKeepText(d){
+    return '최근 ' + d.keepDays + '일 · 최대 ' + fmt(d.max) + '줄';
+  }
+  function chatInfoHTML(d){
+    return '<div class="hint" style="margin:0 0 4px">' +
+      '<b>저장 기간</b>: 최근 ' + d.keepDays + '일 (더 오래된 채팅은 자동으로 지워져요)<br>' +
+      '<b>저장 줄 수</b>: 최대 ' + fmt(d.max) + '줄 (넘으면 오래된 것부터 지워져요)<br>' +
+      '<b>지금 모인 채팅</b>: ' + fmt(d.stored) + '줄' + (d.since ? ' · ' + dayHm(d.since) + '부터' : '') + '<br>' +
+      '<br>작업실 서버가 이상호 방송 채팅방에 들어가 있는 동안 받은 채팅을 직접 저장해요 (다른 사이트에서 가져오지 않아요). ' +
+      '배포·재시작으로 잠깐 끊긴 사이의 채팅은 빠질 수 있어요. 💬 최근 채팅 보기와 3 금지 단어가 이 기록을 써요. 로그인한 매니저만 볼 수 있어요.' +
+    '</div>';
+  }
+  function openOverlay(title, inner){
+    closeHist();
+    var wrap = document.createElement('div');
+    wrap.className = 'hx-overlay';
+    wrap.innerHTML = '<div class="hx" role="dialog" aria-label="' + esc(title) + '"><div class="hx-head"><h3>' + title + '</h3>' +
+      '<button type="button" class="hx-close" data-hx-close aria-label="닫기">✕</button></div>' +
+      '<div class="hx-body">' + inner + '</div></div>';
+    document.body.appendChild(wrap);
+    return wrap.querySelector('.hx-body');
+  }
+  async function openChatInfo(){
+    var body = openOverlay('채팅 기록 안내', '<div class="hint">불러오는 중…</div>');
+    try { var d = await (await fetch('/api/chat/info')).json(); body.innerHTML = chatInfoHTML(d); }
+    catch(e){ body.innerHTML = '<div class="error">불러오지 못했어요.</div>'; }
+  }
+  async function openChats(id, nick){
+    var title = esc(nick || id) + (nick && nick !== id ? ' <span class="uid">(' + esc(id) + ')</span>' : '') + ' 최근 채팅';
+    var body = openOverlay(title, '<div class="hint">불러오는 중…</div>');
+    try {
+      var res = await fetch('/api/chat/user?id=' + encodeURIComponent(id));
+      var d = await res.json();
+      if (!res.ok) throw new Error(d.error || ('HTTP ' + res.status));
+      var head = '<div class="stats" style="margin:4px 0 6px">' +
+        (d.inRoom ? '<span class="tag in">참여 중</span>' : '') + (d.watched ? '<span class="tag">⭐ 주의 시청자</span>' : '') +
+        (d.prevNick ? '<span class="old-nick">이전 닉 ' + esc(d.prevNick) + '</span>' : '') +
+        '<span>채팅 <b>' + fmt(d.total) + '</b>줄' + (d.total > d.list.length ? ' (최신 ' + d.list.length + '줄만)' : '') + '</span>' +
+        '<span title="저장 기간·줄 수는 탭 옆 ! 버튼에서 볼 수 있어요">' + chatKeepText(d) + ' 기록에서</span></div>';
+      if (!d.list.length) { body.innerHTML = head + '<div class="vempty">' + chatKeepText(d) + ' 기록 안에 이 시청자가 친 채팅이 없어요.</div>'; return; }
+      var lastDay = '', html = '';
+      d.list.forEach(function(c){
+        var dt = new Date(c.ts), day = (dt.getMonth()+1) + '월 ' + dt.getDate() + '일 (' + ['일','월','화','수','목','금','토'][dt.getDay()] + ')';
+        if (day !== lastDay) { lastDay = day; html += '<div class="hx-date">' + day + '</div>'; }
+        var hit = d.banned.filter(function(k){ return bwNorm(c.message).indexOf(k) >= 0; });
+        html += '<div class="feed-row' + (hit.length ? ' banned' : '') + '"><span class="t">' + hm(c.ts) + ':' + pad(dt.getSeconds()) + '</span>' +
+          (c.nick !== d.nick ? '<span class="uid" title="채팅 칠 때 닉네임">' + esc(c.nick) + '</span>' : '') +
+          '<span class="msg">' + hlWords(c.message, hit) + '</span>' +
+          (hit.length ? '<span class="tag k" title="걸린 금지 단어">🚫 ' + esc(hit.join(', ')) + '</span>' : '') + '</div>';
+      });
+      body.innerHTML = head + '<div class="feed">' + html + '</div>';
+    } catch(e){ body.innerHTML = '<div class="error">불러오지 못했어요: ' + esc(e.message) + '</div>'; }
+  }
+  $('chatInfoBtn').addEventListener('click', openChatInfo);
+
   document.addEventListener('click', function(e){
+    var cb = e.target.closest('[data-chats]');
+    if (cb) { openChats(cb.getAttribute('data-chats'), cb.getAttribute('data-nick')); return; }
     var b = e.target.closest('[data-hist]');
     if (b) { openHist(b.getAttribute('data-hist'), b.getAttribute('data-nick'), b.getAttribute('data-period')); return; }
     var o = e.target.closest('.hx-overlay');
@@ -945,7 +1007,8 @@
     var nick = c.nickNow || c.nick;
     return '<button type="button" class="copy vname" data-copy="' + esc(nick) + '" title="닉네임 복사">' + esc(nick) + '</button>' +
       (c.id !== nick ? ' <span class="uid">(<button type="button" class="copy" data-copy="' + esc(c.id) + '" title="아이디 복사">' + esc(c.id) + '</button>)</span>' : '') +
-      (c.inRoom ? ' <span class="tag in">참여 중</span>' : '') + (c.watched ? ' <span class="tag" title="주의 시청자">⭐</span>' : '');
+      (c.inRoom ? ' <span class="tag in">참여 중</span>' : '') + (c.watched ? ' <span class="tag" title="주의 시청자">⭐</span>' : '') +
+      magBtn(c.id, nick);
   }
   function renderBW(d){
     var known = d.words.map(function(x){ return bwNorm(x.w); });
