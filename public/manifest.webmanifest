@@ -1,0 +1,13 @@
+{
+  "name": "이상호 매니저 작업실",
+  "short_name": "매니저 작업실",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#111315",
+  "theme_color": "#111315",
+  "lang": "ko",
+  "icons": [
+    { "src": "/icons/icon-schedule.png", "sizes": "128x128", "type": "image/png", "purpose": "any" }
+  ]
+}

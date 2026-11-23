@@ -15,6 +15,7 @@
 const { SoopChat } = require('./soop-chat');
 const { getState, setState } = require('./store');
 const keepAwake = require('./keepawake');
+const push = require('./push');
 
 const STREAMER = 'lshooooo';
 const SANCTIONS_KEY = 'sanctions';
@@ -408,8 +409,9 @@ function startChat() {
     else connectedAt = Date.now();
     chatStatus = { state: s.state, message: s.message, title: s.title || '' };
     console.log(`[watch] ${STREAMER}: ${s.state} - ${s.message}`);
+    push.onStatus(s); // 🔔 방송 시작·종료 알림 (같은 방송은 한 번만)
   });
-  chat.on('title', (title) => { chatStatus = { ...chatStatus, title }; });
+  chat.on('title', (title) => { chatStatus = { ...chatStatus, title }; push.onTitle(title); });
   chat.on('chat', onChat);
   chat.on('packet', onPacket);
   keepAwake.acquire('watch');

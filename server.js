@@ -8,6 +8,7 @@ const keepAwake = require('./keepawake');
 const auth = require('./auth');
 const audit = require('./audit');
 const backup = require('./backup');
+const push = require('./push');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -35,6 +36,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 keepAwake.mount(app);
 roulette.mount(app);
 watch.mount(app);
+push.mount(app); // 🔔 방송 알림 (웹 푸시)
 
 // 지금 돌고 있는 버전 (배포 확인용, /deploy-site 가 씀). Render 가 배포한 커밋을 RENDER_GIT_COMMIT 으로 넣어준다.
 const STARTED_AT = Date.now();
@@ -95,6 +97,10 @@ async function loadSanctionRules() {
 // 제목 옆 '📰 패치 노트' 버튼으로 보는 글. 처음엔 기본 내용으로 시작하고, 매니저가 고칠 수 있다.
 const DEFAULT_PATCH_NOTES = [
   '📢 이상호 매니저 작업실 업데이트',
+  '',
+  '[11월 23일]',
+  '- 🔔 방송 알림 (패치 노트 옆, 기기마다 켜기 · 아이폰은 홈 화면에 추가 후)',
+  '- 🚫 금지 단어 · 💬 시청자별 최근 채팅 (참여자 검색 페이지)',
   '',
   '[11월 14일]',
   '- 📰 패치 노트 (제재 기준 옆, 매니저가 수정 가능)',

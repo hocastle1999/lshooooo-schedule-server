@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>이상호 매니저 작업실</title>
 <link rel="icon" type="image/png" href="/icons/icon-schedule.png">
+<!-- 🔔 방송 알림: 아이폰은 홈 화면에 추가한 앱으로 열어야 알림을 받을 수 있다 -->
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-schedule.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="매니저 작업실">
 <style>
   :root{
     --bg:#F4F5F3;
@@ -193,6 +198,7 @@
 <div id="app"><div style="padding:40px;text-align:center;color:var(--text-dim);">불러오는 중…</div></div>
 <script src="/auth.js"></script>
 <script src="/unicode.js"></script>
+<script src="/push-ui.js"></script>
 <script>
 (function(){
   "use strict";
@@ -540,6 +546,7 @@
             TOOLS.map(function(l){ return '<a class="tool-btn" href="'+esc(l.url)+'" target="_blank" rel="noopener">'+esc(l.label)+'</a>'; }).join('')+
             '<button type="button" class="tool-btn" data-action="open-rules">📋 제재 기준</button>'+
             '<button type="button" class="tool-btn" data-action="open-notes">📰 패치 노트</button>'+
+            '<button type="button" class="tool-btn" data-action="open-push">🔔 방송 알림</button>'+
           '</div>'+
           '<div class="mgr-row">'+managersHTML()+meHTML()+'</div>'+
         '</div>'+
@@ -630,6 +637,7 @@
     if(slot) slot.innerHTML='';
   }
   var uploading = false;
+  window.__toast = function(m){ toast(m); }; // push-ui.js 가 쓴다
   function toast(msg){
     var t=document.createElement('div');
     t.className='toast'; t.textContent=msg;
@@ -932,6 +940,7 @@
     if(action==='memo-rename'){ var mp=(STATE.memos||[]).find(function(x){return x.id===el.getAttribute('data-id');}); if(mp) openMemoPageModal(mp); return; }
     if(action==='logout'){ if(confirm('로그아웃할까요?')) api('POST','/api/logout').then(function(){ location.href='/login.html'; }); return; }
     if(action==='open-unicode'){ if(window.openUnicodeModal) window.openUnicodeModal(); return; }
+    if(action==='open-push'){ if(window.openPushModal) window.openPushModal(); return; }
     if(action==='notices-toggle'){ NOTICE_OPEN=!NOTICE_OPEN; try{ localStorage.setItem('noticesOpen', NOTICE_OPEN?'1':'0'); }catch(e){} stashMemoDraft(); render(); return; }
     if(action==='adm-toggle'){ ADM.open=!ADM.open; stashMemoDraft(); render(); if(ADM.open) loadAdmin(); return; }
     if(action==='adm-tab'){ ADM.tab=el.getAttribute('data-tab'); stashMemoDraft(); render(); loadAdmin(); return; }

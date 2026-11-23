@@ -12,8 +12,9 @@ const express = require('express');
 const COOKIE = 'mgr';
 const TTL_MS = 30 * 24 * 3600 * 1000;
 
-// 로그인 없이 열려야 하는 것: 로그인 화면, 잠들기 방지 신호, 배포 확인, 아이콘
-const OPEN_PATHS = ['/login.html', '/api/login', '/api/ping', '/api/version', '/auth.js'];
+// 로그인 없이 열려야 하는 것: 로그인 화면, 잠들기 방지 신호, 배포 확인, 아이콘,
+// 그리고 방송 알림용 서비스 워커·앱 정보(브라우저가 쿠키 없이 받아 가는 경우가 있다. 데이터는 없음)
+const OPEN_PATHS = ['/login.html', '/api/login', '/api/ping', '/api/version', '/auth.js', '/sw.js', '/manifest.webmanifest'];
 const OPEN_PREFIXES = ['/icons/'];
 
 const password = () => process.env.MANAGER_PASSWORD || '';
