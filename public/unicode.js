@@ -106,7 +106,9 @@
     var rows = rowsHTML();
     document.getElementById('modal-slot').innerHTML =
       '<div class="overlay" data-action="overlay" data-key=""><div class="modal wide" data-stop="1">'+
-        '<h3>🔤 유니코드 텍스트 변환기</h3>'+
+        // 예전 바로가기 줄의 '유니코드 변환' 사이트 링크를 제목 옆으로 옮김
+        '<h3 style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">🔤 유니코드 텍스트 변환기'+
+          '<a class="btn" href="https://anytexteditor.com/ko/unicode-text-converter" target="_blank" rel="noopener" title="새 창에서 유니코드 변환 사이트 열기" style="margin-left:auto;padding:3px 10px;font-size:12px;font-weight:700;text-decoration:none;">🔗 유니코드 변환</a></h3>'+
         '<p style="margin:0;font-size:12px;color:var(--text-dim);line-height:1.5;">글을 입력하면 스타일별로 바뀐 글자가 나와요. 복사해서 채팅·닉네임·공지에 붙여 넣으면 돼요. 대부분은 영어·숫자만 바뀌고, \'한글 가능\' 스타일은 한글에도 돼요. 일부 기기나 채팅창에서는 빈 네모로 보일 수 있어요.</p>'+
         '<textarea id="uc-input" class="rules-edit" style="min-height:70px;" placeholder="예: Lee Sang Ho 2026"></textarea>'+
         '<div class="uc-list" id="uc-list">'+rows+'</div>'+
