@@ -40,7 +40,11 @@
     b.type = 'button';
     b.className = 'ar-bar';
     b.textContent = '🔄 새 버전이 있어요 · 눌러서 새로고침';
-    b.addEventListener('click', reload);
+    // 새 버전으로 새로고침하면 작업실에서 패치 노트를 한 번 띄운다 (index.html 이 이 표시를 보고 연다)
+    b.addEventListener('click', function(){
+      try { localStorage.setItem('notes-after-update', '1'); } catch(e) {}
+      reload();
+    });
     document.body.appendChild(b);
     document.body.classList.add('ar-has-bar');
   }

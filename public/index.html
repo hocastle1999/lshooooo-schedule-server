@@ -1375,7 +1375,25 @@
     });
   });
 
-  loadState();
+  // 📰 그날 처음 작업실을 열면 패치 노트를 한 번 띄운다 (이 브라우저 기준, 날짜는 내 컴퓨터 날짜)
+  function showNotesOncePerDay(){
+    // '새 버전이 있어요' 띠를 눌러 새로고침한 경우에도 한 번 띄운다
+    var afterUpdate = false;
+    try { afterUpdate = localStorage.getItem('notes-after-update') === '1'; if (afterUpdate) localStorage.removeItem('notes-after-update'); } catch(e) {}
+    if (afterUpdate && STATE.patchNotes && STATE.patchNotes.text && !document.querySelector('#modal-slot .overlay')) {
+      try { localStorage.setItem('notes-seen-day', todayKey()); } catch(e) {}
+      openNotesModal(false);
+      return;
+    }
+    var today = todayKey(), seen = null;
+    try { seen = localStorage.getItem('notes-seen-day'); } catch(e) { return; } // 기억을 못 하는 브라우저면 띄우지 않는다 (매번 뜨지 않게)
+    if (seen === today) return;
+    try { localStorage.setItem('notes-seen-day', today); } catch(e) { return; }
+    if (!STATE.patchNotes || !STATE.patchNotes.text) return;
+    if (document.querySelector('#modal-slot .overlay')) return; // 다른 창이 이미 열려 있으면 건너뜀
+    openNotesModal(false);
+  }
+  loadState().then(showNotesOncePerDay).catch(function(){});
   api('GET', '/api/me').then(function(r){ ME = r; stashMemoDraft(); render(); }).catch(function(){});
   loadAdmin();
   setInterval(loadAdmin, 60000);
