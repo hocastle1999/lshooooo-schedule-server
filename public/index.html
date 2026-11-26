@@ -609,13 +609,14 @@
   function sidebarHTML(){
     var head = '<h2 style="display:flex;align-items:center;gap:6px;">'+
       '<button type="button" data-action="notices-toggle" style="font:inherit;font-weight:inherit;background:none;border:none;color:inherit;padding:0;cursor:pointer;">'+(NOTICE_OPEN?'▾':'▸')+' 최근 방송 공지</button>'+helpBtn('notices')+
-      (NOTICE_OPEN?'':'<button type="button" class="btn" data-action="notices-toggle" style="margin-left:auto;padding:4px 10px;font-size:12px;">보기 ('+STATE.notices.length+')</button>')+'</h2>';
+      '<button type="button" class="btn" id="refresh-btn" data-action="refresh" title="방송국 게시판에서 공지를 지금 다시 가져오기" style="margin-left:auto;padding:4px 10px;font-size:12px;flex:none;"'+(refreshing?' disabled':'')+'>'+(refreshing?'새로고침 중…':'⟳ 새로고침')+'</button>'+
+      (NOTICE_OPEN?'':'<button type="button" class="btn" data-action="notices-toggle" style="padding:4px 10px;font-size:12px;flex:none;">보기 ('+STATE.notices.length+')</button>')+'</h2>';
     if(!NOTICE_OPEN) return '<section class="card side">'+head+
       helpText('notices', '공지는 '+esc(STATE.meta.streamer)+'님이 방송국 게시판에 직접 올린 글을 그대로 가져온 것입니다. 제목을 누르면 접거나 펼칠 수 있어요.')+'</section>';
     var list = STATE.notices.length ? STATE.notices.map(noticeCard).join('') : '<div class="empty-notices">아직 크롤링된 공지가 없습니다. 잠시 후 새로고침 해보세요.</div>';
     return '<section class="card side">'+head+
       '<p class="updated">'+esc(STATE.meta.crawledAtLabel)+' · <a href="'+esc(STATE.meta.boardUrl)+'" target="_blank" rel="noopener" style="color:var(--accent)">게시판 원문</a></p>'+
-      helpText('notices', '공지는 '+esc(STATE.meta.streamer)+'님이 방송국 게시판에 직접 올린 글을 그대로 가져온 것입니다. 날짜 표기가 없는 글은 앞뒤 글을 참고한 추정 날짜입니다. 2시간마다 자동으로 다시 가져오고, 위쪽 공지 새로고침 버튼으로 즉시 갱신할 수 있습니다.')+
+      helpText('notices', '공지는 '+esc(STATE.meta.streamer)+'님이 방송국 게시판에 직접 올린 글을 그대로 가져온 것입니다. 날짜 표기가 없는 글은 앞뒤 글을 참고한 추정 날짜입니다. 2시간마다 자동으로 다시 가져오고, 제목 옆 ⟳ 새로고침 버튼으로 즉시 갱신할 수 있습니다.')+
       '<div class="notice-list">'+list+'</div>'+
     '</section>';
   }
@@ -796,7 +797,7 @@
         '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">'+
           '<span class="status-pill">함께 편집 가능</span>'+
           LINKS.map(function(l){ return '<a class="refresh-btn" href="'+esc(l.url)+'" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center;">'+esc(l.label)+'</a>'; }).join('')+
-          '<button type="button" class="refresh-btn" id="refresh-btn" data-action="refresh">'+(refreshing?'새로고침 중…':'⟳ 공지 새로고침')+'</button>'+
+          // ⟳ 공지 새로고침은 '최근 방송 공지' 제목 옆으로 옮김 (sidebarHTML)
         '</div>'+
       '</div>'+
       '<div class="layout"><div style="display:flex;flex-direction:column;gap:18px;">'+calendarHTML()+unscheduledHTML()+tourHTML()+'</div><div style="display:flex;flex-direction:column;gap:18px;">'+memoHTML()+filesHTML()+adminHTML()+sidebarHTML()+'</div></div>'+
