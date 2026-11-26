@@ -111,7 +111,7 @@ function snapshot() {
 
 // ---- 전자비서 수집 ----
 function secLine(it) {
-  return String(it.name || it.id).replace(/[\r\n]/g, ' ') + '(' + it.category + ' ' + it.count + '개) : ' + String(it.message).replace(/[\r\n]+/g, ' ');
+  return String(it.name || it.id).replace(/[\r\n]/g, ' ') + '(' + it.category + ' ' + it.count + ') : ' + String(it.message).replace(/[\r\n]+/g, ' ');
 }
 function secretaryView() {
   const sec = state.secretary;
@@ -121,7 +121,7 @@ function secretaryView() {
     on: sec.on, windowSec: sec.windowSec, unit,
     total: sec.items.length, hidden: sec.items.length - shown.length,
     items: shown.slice().reverse(), // 최신이 위
-    text: shown.map(secLine).join('\n'), // 복사용: 들어온 순서대로
+    text: shown.map((it, i) => (i + 1) + '. ' + secLine(it)).join('\n'), // 복사용: 들어온 순서대로 "1. 닉네임(별풍선 200) : 채팅"
     waiting: secPending.size,
   };
 }

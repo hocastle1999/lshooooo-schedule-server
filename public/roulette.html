@@ -108,6 +108,11 @@
   .wheel-opt input{width:15px;height:15px;margin:0;accent-color:var(--accent);}
   .wheel-hist{font-size:12.5px;color:var(--text-dim);display:flex;flex-direction:column;gap:4px;max-height:180px;overflow-y:auto;}
   .wheel-hist b{color:var(--text);}
+  .rl-tabs{display:inline-flex;gap:6px;flex-wrap:wrap;}
+  .rl-tab{font:inherit;font-size:14px;font-weight:800;border:1px solid var(--border);background:var(--surface-2);color:var(--text-dim);border-radius:999px;padding:6px 14px;cursor:pointer;}
+  .rl-tab .n{display:inline-block;min-width:18px;height:18px;line-height:18px;border-radius:9px;background:var(--surface);font-size:11px;margin-right:6px;text-align:center;}
+  .rl-tab.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .rl-tab.on .n{background:rgba(255,255,255,.25);}
   .sec-opts{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;}
   .sec-win{font-size:13px;color:var(--text-dim);display:inline-flex;align-items:center;gap:6px;}
   .sec-win input{width:64px;padding:5px 8px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--text);font:inherit;}
@@ -174,8 +179,9 @@
         </div>
       </section>
 
-      <section class="card">
-        <h2>룰렛 명단 <span class="badge">룰렛 사이트 이름 입력창에 붙여넣기</span></h2>
+      <!-- 1 룰렛 명단 / 2 룰렛 돌리기 / 3 전자비서 수집: 같은 자리에서 골라 본다 (고른 탭은 이 브라우저에 기억) -->
+      <section class="card" id="rlList">
+        <h2><div class="rl-tabs"><button type="button" class="rl-tab on" data-rl-tab="list"><span class="n">1</span>룰렛 명단</button><button type="button" class="rl-tab" data-rl-tab="wheel"><span class="n">2</span>룰렛 돌리기</button><button type="button" class="rl-tab" data-rl-tab="sec"><span class="n">3</span>전자비서 수집</button></div><span class="badge">룰렛 사이트 이름 입력창에 붙여넣기</span></h2>
         <textarea id="list" readonly placeholder="후원이 들어오면 자동으로 채워집니다…"></textarea>
         <div class="actions">
           <button class="btn" id="copyBtn">명단 복사</button>
@@ -185,24 +191,8 @@
         <div class="hint">명단을 복사한 뒤 <a href="https://lazygyu.github.io/roulette" target="_blank" rel="noopener noreferrer">lazygyu.github.io/roulette</a> 이름 입력창에 붙여넣으세요. <b>*숫자</b>만큼 당첨 확률이 올라갑니다. 위 표의 닉네임이나 아이디를 누르면 그 사람만 복사돼요.</div>
       </section>
 
-      <section class="card">
-        <h2>전자비서 수집 <span class="badge" id="secBadge">0개</span></h2>
-        <div class="sec-opts">
-          <label class="wheel-opt"><input type="checkbox" id="secOn" checked>전자비서 수집 켜기</label>
-          <label class="sec-win">후원 후 <input type="number" id="secWin" min="5" max="300" value="30"> 초 안에 친 첫 채팅</label>
-        </div>
-        <div class="hint" style="margin:6px 0 8px">형식: <b>닉네임(후원종류 개수) : 채팅내용</b> · 위 설정의 <b>기준 개수 이상</b>, 체크된 종류의 후원만 보이고 복사돼요. <span id="secHidden"></span></div>
-        <textarea id="secText" readonly placeholder="후원이 들어오고, 그 사람이 정해진 시간 안에 채팅을 치면 여기에 자동으로 채워집니다."></textarea>
-        <div class="actions">
-          <button class="btn" id="secCopyBtn">전자비서 복사</button>
-          <button class="btn btn-danger" id="secClearBtn">전자비서 비우기</button>
-          <span class="copied" id="secCopied">복사됐습니다!</span>
-        </div>
-        <div class="hint">같은 사람이 시간 안에 같은 종류로 여러 번 후원하면 개수를 합치고, 채팅은 첫 채팅 하나만 받아요. 위의 <b>초기화</b>를 누르면 전자비서 목록도 같이 비워져요. 목록은 매니저 모두가 같이 봐요.</div>
-      </section>
-
-      <section class="card">
-        <h2>룰렛 돌리기 <span class="badge" id="wheelBadge">0명</span></h2>
+      <section class="card" id="rlWheel" hidden>
+        <h2><div class="rl-tabs"><button type="button" class="rl-tab" data-rl-tab="list"><span class="n">1</span>룰렛 명단</button><button type="button" class="rl-tab on" data-rl-tab="wheel"><span class="n">2</span>룰렛 돌리기</button><button type="button" class="rl-tab" data-rl-tab="sec"><span class="n">3</span>전자비서 수집</button></div><span class="badge" id="wheelBadge">0명</span></h2>
         <div class="wheel-wrap">
           <div class="wheel-box">
             <div class="wheel-pin"></div>
@@ -218,6 +208,22 @@
           </div>
         </div>
         <div class="hint">룰렛 명단의 <b>*숫자</b>만큼 칸이 넓어져서 당첨 확률이 올라갑니다. 돌리기는 이 화면에서만 돌아가요 (다른 매니저 화면에는 안 보임).</div>
+      </section>
+
+      <section class="card" id="rlSec" hidden>
+        <h2><div class="rl-tabs"><button type="button" class="rl-tab" data-rl-tab="list"><span class="n">1</span>룰렛 명단</button><button type="button" class="rl-tab" data-rl-tab="wheel"><span class="n">2</span>룰렛 돌리기</button><button type="button" class="rl-tab on" data-rl-tab="sec"><span class="n">3</span>전자비서 수집</button></div><span class="badge" id="secBadge">0개</span></h2>
+        <div class="sec-opts">
+          <label class="wheel-opt"><input type="checkbox" id="secOn" checked>전자비서 수집 켜기</label>
+          <label class="sec-win">후원 후 <input type="number" id="secWin" min="5" max="300" value="30"> 초 안에 친 첫 채팅</label>
+        </div>
+        <div class="hint" style="margin:6px 0 8px">형식: <b>1. 닉네임(후원종류 개수) : 채팅내용</b> · 위 설정의 <b>기준 개수 이상</b>, 체크된 종류의 후원만 보이고 복사돼요. <span id="secHidden"></span></div>
+        <textarea id="secText" readonly placeholder="후원이 들어오고, 그 사람이 정해진 시간 안에 채팅을 치면 여기에 자동으로 채워집니다."></textarea>
+        <div class="actions">
+          <button class="btn" id="secCopyBtn">전자비서 복사</button>
+          <button class="btn btn-danger" id="secClearBtn">전자비서 비우기</button>
+          <span class="copied" id="secCopied">복사됐습니다!</span>
+        </div>
+        <div class="hint">같은 사람이 시간 안에 같은 종류로 여러 번 후원하면 개수를 합치고, 채팅은 첫 채팅 하나만 받아요. 위의 <b>초기화</b>를 누르면 전자비서 목록도 같이 비워져요. 목록은 매니저 모두가 같이 봐요.</div>
       </section>
     </div>
   </div>
@@ -309,6 +315,19 @@
     wheel.setList(d.rouletteText);
     renderSecretary(d.secretary);
   }
+
+  // ---- 1 룰렛 명단 / 2 룰렛 돌리기 / 3 전자비서 수집 탭 ----
+  function showRlTab(t){
+    if (t !== 'wheel' && t !== 'sec') t = 'list';
+    $('rlList').hidden = t !== 'list';
+    $('rlWheel').hidden = t !== 'wheel';
+    $('rlSec').hidden = t !== 'sec';
+    try { localStorage.setItem('roulette-tab', t); } catch(e) {}
+  }
+  document.addEventListener('click', function(e){
+    var b = e.target.closest('[data-rl-tab]'); if (b) showRlTab(b.getAttribute('data-rl-tab'));
+  });
+  (function(){ var t = 'list'; try { t = localStorage.getItem('roulette-tab') || 'list'; } catch(e) {} showRlTab(t); })();
 
   // ---- 전자비서 수집 ----
   var secTimer = null;
