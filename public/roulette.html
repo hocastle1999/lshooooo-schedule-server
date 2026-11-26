@@ -108,6 +108,8 @@
   .wheel-opt input{width:15px;height:15px;margin:0;accent-color:var(--accent);}
   .wheel-hist{font-size:12.5px;color:var(--text-dim);display:flex;flex-direction:column;gap:4px;max-height:180px;overflow-y:auto;}
   .wheel-hist b{color:var(--text);}
+  .fold-btn{font:inherit;font-weight:800;font-size:16px;background:none;border:none;color:inherit;padding:0;cursor:pointer;display:inline-flex;align-items:center;gap:6px;}
+  .fold-btn .fold-arrow{font-size:13px;color:var(--text-dim);width:12px;}
   .rl-tabs{display:inline-flex;gap:6px;flex-wrap:wrap;}
   .rl-tab{font:inherit;font-size:14px;font-weight:800;border:1px solid var(--border);background:var(--surface-2);color:var(--text-dim);border-radius:999px;padding:6px 14px;cursor:pointer;}
   .rl-tab .n{display:inline-block;min-width:18px;height:18px;line-height:18px;border-radius:9px;background:var(--surface);font-size:11px;margin-right:6px;text-align:center;}
@@ -161,14 +163,14 @@
 
     <div class="col">
       <section class="card">
-        <h2>실시간 후원 현황 <span class="badge" id="countBadge">0명</span>
+        <h2><button type="button" class="fold-btn" id="liveFold" aria-expanded="true" title="접기/펼치기"><span class="fold-arrow">▾</span>실시간 후원 현황</button> <span class="badge" id="countBadge">0명</span>
           <span class="head-actions">
             <span class="sort" id="sortBox"><button type="button" data-sort="recent">최신순</button><button type="button" data-sort="count">개수순</button></span>
             <a class="btn" href="/api/roulette/log.csv">후원 기록 받기</a>
             <button class="btn btn-danger" id="resetBtn">초기화</button>
           </span>
         </h2>
-        <div class="table-wrap">
+        <div class="table-wrap" id="liveTable">
           <table>
             <thead><tr>
               <th>닉네임(아이디)</th><th class="num">별풍선</th><th class="num">애드벌룬</th>
@@ -315,6 +317,16 @@
     wheel.setList(d.rouletteText);
     renderSecretary(d.secretary);
   }
+
+  // ---- 실시간 후원 현황 접기/펼치기 (이 브라우저에 기억) ----
+  function setLiveFold(open){
+    $('liveTable').hidden = !open;
+    $('liveFold').setAttribute('aria-expanded', open ? 'true' : 'false');
+    $('liveFold').querySelector('.fold-arrow').textContent = open ? '▾' : '▸';
+    try { localStorage.setItem('roulette-live-open', open ? '1' : '0'); } catch(e) {}
+  }
+  $('liveFold').addEventListener('click', function(){ setLiveFold($('liveTable').hidden); });
+  (function(){ var open = true; try { open = localStorage.getItem('roulette-live-open') !== '0'; } catch(e) {} setLiveFold(open); })();
 
   // ---- 1 룰렛 명단 / 2 룰렛 돌리기 / 3 전자비서 수집 탭 ----
   function showRlTab(t){
