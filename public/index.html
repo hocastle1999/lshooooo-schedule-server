@@ -204,8 +204,9 @@
   .memo-open-btn.on{background:var(--accent);border-color:var(--accent);color:#fff;}
   .memo-panel{position:fixed;top:12px;right:12px;bottom:12px;width:min(460px,calc(100vw - 24px));z-index:15;overflow-y:auto;border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.35);}
   .memo-panel > .card{min-height:100%;box-sizing:border-box;}
-  .memo-panel-x{position:absolute;top:12px;right:14px;z-index:2;font:inherit;font-size:18px;line-height:1;background:none;border:none;color:var(--text-dim);cursor:pointer;padding:4px 6px;border-radius:8px;}
-  .memo-panel-x:hover{color:var(--text);background:var(--surface-2);}
+  .memo-panel-x, .m-pop-btn{position:absolute;top:14px;right:14px;z-index:2;font:inherit;font-size:12px;font-weight:700;line-height:1.2;border:1px solid var(--border);background:var(--surface-2);color:var(--text-dim);cursor:pointer;padding:5px 10px;border-radius:8px;}
+  .m-pop-wrap{position:relative;}
+  .m-pop-btn:hover, .memo-panel-x:hover{color:var(--accent);border-color:var(--accent);}
   .cal-fold-btn, .m-fold-btn{display:none;}
   @media (max-width:600px){
     .cal-fold-btn{display:inline-flex;font:inherit;font-size:12px;font-weight:700;border:1px solid var(--border);background:var(--surface-2);color:var(--text-dim);border-radius:8px;padding:4px 9px;cursor:pointer;margin-left:6px;}
@@ -808,14 +809,18 @@
   function isMobile(){ return !!MOBILE_MQ.matches; }
   var CAL_FOLD = false, MEMO_FOLD = false;
   try { CAL_FOLD = localStorage.getItem('cal-fold') === '1'; MEMO_FOLD = localStorage.getItem('memo-fold') === '1'; } catch(e) {}
+  // 메모장 보는 방법 두 가지 (PC):
+  //   원래 자리(오른쪽 칸) — 카드 오른쪽 위 '⧉ 띄워 보기'로 겹쳐 보기 창으로
+  //   겹쳐 보기 창 — 오른쪽 위 '↙ 원래 자리로'(또는 위쪽 📝 메모장 버튼)로 다시 오른쪽 칸으로
+  // 메모장은 한 곳에만 그린다 (두 곳에 동시에 있으면 입력이 엇갈림).
   function memoBlockHTML(){
-    // 모바일: 화면 안 + 접기 버튼 / PC: 오른쪽 위 버튼으로 여는 겹쳐 보기 창
     if(isMobile()) return '<div class="m-fold-wrap'+(MEMO_FOLD?' folded':'')+'"><button type="button" class="m-fold-btn" data-action="memo-fold">'+(MEMO_FOLD?'▸ 펼치기':'▾ 접기')+'</button>'+memoHTML()+'</div>';
-    return '';
+    if(MEMO_PANEL) return ''; // 겹쳐 보기 창에 떠 있음
+    return '<div class="m-pop-wrap"><button type="button" class="m-pop-btn" data-action="memo-panel" title="메모장을 화면 오른쪽에 겹쳐 띄우기">⧉ 띄워 보기</button>'+memoHTML()+'</div>';
   }
   function memoPanelHTML(){
-    if(isMobile()) return '';
-    return '<aside class="memo-panel"'+(MEMO_PANEL?'':' hidden')+'><button type="button" class="memo-panel-x" data-action="memo-panel" aria-label="메모장 닫기" title="닫기">✕</button>'+memoHTML()+'</aside>';
+    if(isMobile() || !MEMO_PANEL) return '';
+    return '<aside class="memo-panel"><button type="button" class="memo-panel-x" data-action="memo-panel" title="겹쳐 보기 창을 닫고 원래 자리(오른쪽 칸)에서 보기">↙ 원래 자리로</button>'+memoHTML()+'</aside>';
   }
   // 폭이 바뀌어 모바일/PC 가 바뀌면 메모장 자리를 다시 그린다
   if(MOBILE_MQ.addEventListener) MOBILE_MQ.addEventListener('change', function(){ stashMemoDraft(); render(); });
