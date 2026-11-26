@@ -9,6 +9,11 @@
 //     명단이 그대로 남고 수집 중이었으면 자동으로 다시 접속한다.
 //   - 수집 중지/다른 스트리머로 변경이 된다 (exe 는 실행당 한 번만 연결 가능했음).
 //   - 수집 중에는 서버가 잠들지 않게 한다 (keepawake.js).
+//
+// 전자비서 수집: 후원이 들어오고 그 사람이 30초(설정 가능) 안에 채팅을 치면
+//   "닉네임(후원유형 개수) : 채팅내용" 으로 모은다 (룰렛 칸 이름·소원 등을 채팅으로 받을 때).
+//   같은 사람이 시간 안에 여러 번 후원하면 개수를 합치고, 채팅은 첫 채팅 하나만 쓴다.
+//   화면·복사에는 그 후원(종류가 켜져 있고) 개수가 '기준 개수' 이상인 것만 나온다.
 
 const { SoopChat } = require('./soop-chat');
 const { getState, setState } = require('./store');
@@ -37,7 +42,11 @@ let state = {
   bonus: true,
   enabled: defaultEnabled(),
   entries: [], // [{ key, id, name, counts: { 카테고리: 개수 } }]
+  secretary: { on: true, windowSec: 30, items: [] }, // 전자비서 수집. items: [{ ts, id, name, category, count, message }]
 };
+const SEC_MAX_ITEMS = 500;
+// 후원은 들어왔는데 아직 채팅을 안 친 사람: 아이디 → { at, name, category, count }
+const secPending = new Map();
 let log = []; // [[시간, 종류, 아이디, 닉네임, 개수, 미션제목, 미션원본유형]]
 let chat = null;
 let chatStatus = { state: 'idle', message: '대기 중', title: '' };
@@ -96,8 +105,54 @@ function snapshot() {
     }),
     rouletteText: rouletteText(),
     logCount: log.length,
+    secretary: secretaryView(),
   };
 }
+
+// ---- 전자비서 수집 ----
+function secLine(it) {
+  return String(it.name || it.id).replace(/[\r\n]/g, ' ') + '(' + it.category + ' ' + it.count + '개) : ' + String(it.message).replace(/[\r\n]+/g, ' ');
+}
+function secretaryView() {
+  const sec = state.secretary;
+  const unit = Math.max(1, state.unit | 0);
+  const shown = sec.items.filter((it) => state.enabled[it.category] !== false && it.count >= unit);
+  return {
+    on: sec.on, windowSec: sec.windowSec, unit,
+    total: sec.items.length, hidden: sec.items.length - shown.length,
+    items: shown.slice().reverse(), // 최신이 위
+    text: shown.map(secLine).join('\n'), // 복사용: 들어온 순서대로
+    waiting: secPending.size,
+  };
+}
+function secOnDonation(category, id, name, count) {
+  const sec = state.secretary;
+  if (!sec.on || !id) return;
+  const now = Date.now();
+  const p = secPending.get(id);
+  // 시간 안에 같은 종류로 또 후원하면 개수를 합친다 (다른 종류면 새로 시작)
+  if (p && p.category === category && now - p.at <= sec.windowSec * 1000) { p.count += count; p.at = now; p.name = name; }
+  else secPending.set(id, { at: now, name, category, count });
+}
+function secOnChat(c) {
+  const sec = state.secretary;
+  if (!sec.on || !c.userId) return;
+  const p = secPending.get(c.userId);
+  if (!p) return;
+  secPending.delete(c.userId);
+  if (Date.now() - p.at > sec.windowSec * 1000) return;
+  const message = String(c.message || '').trim().slice(0, 200);
+  if (!message) return;
+  sec.items.push({ ts: Date.now(), id: c.userId, name: c.nickname || p.name, category: p.category, count: p.count, message });
+  if (sec.items.length > SEC_MAX_ITEMS) sec.items = sec.items.slice(-SEC_MAX_ITEMS);
+  console.log(`[roulette] [전자비서] ${secLine(sec.items[sec.items.length - 1])}`);
+  scheduleSave();
+}
+// 오래된 대기는 정리
+setInterval(() => {
+  const cut = Date.now() - (state.secretary.windowSec || 30) * 1000;
+  for (const [k, p] of secPending) if (p.at < cut) secPending.delete(k);
+}, 30 * 1000).unref();
 
 // ---- 저장 ----
 
@@ -147,6 +202,7 @@ function addDonation(category, id, name, count, title, rawType) {
   e.lastAt = Date.now(); // 최신순 정렬용
 
   addLog(category, id, name, count, title, rawType);
+  secOnDonation(category, id || key, name, count);
   console.log(`[roulette] [${category}] ${name}(${id}) x${count}`);
   scheduleSave();
 }
@@ -195,6 +251,7 @@ function startChat() {
   });
   chat.on('title', (title) => { chatStatus = { ...chatStatus, title }; });
   chat.on('packet', onPacket);
+  chat.on('chat', secOnChat);
   keepAwake.acquire('roulette');
 }
 
@@ -219,7 +276,8 @@ function ensureLoaded() {
   if (!loading) {
     loading = (async () => {
       const saved = await getState(STATE_KEY, null);
-      if (saved && typeof saved === 'object') state = { ...state, ...saved, enabled: { ...defaultEnabled(), ...(saved.enabled || {}) } };
+      if (saved && typeof saved === 'object') state = { ...state, ...saved, enabled: { ...defaultEnabled(), ...(saved.enabled || {}) }, secretary: { ...state.secretary, ...(saved.secretary || {}) } };
+      if (!Array.isArray(state.secretary.items)) state.secretary.items = [];
       const savedLog = await getState(LOG_KEY, []);
       if (Array.isArray(savedLog)) log = savedLog;
     })();
@@ -281,7 +339,28 @@ function mount(app) {
   app.post('/api/roulette/reset', async (req, res) => {
     await ensureLoaded();
     state.entries = [];
+    state.secretary.items = [];
+    secPending.clear();
     addLog('리셋', '', '', 0, '', '');
+    await saveNow();
+    res.json(snapshot());
+  });
+
+  // 전자비서 수집 켜기/끄기, 채팅 기다리는 시간(초)
+  app.post('/api/roulette/secretary', async (req, res) => {
+    await ensureLoaded();
+    const b = req.body || {};
+    if (b.on !== undefined) state.secretary.on = Boolean(b.on);
+    if (b.windowSec !== undefined) state.secretary.windowSec = Math.min(300, Math.max(5, parseInt(b.windowSec, 10) || 30));
+    if (!state.secretary.on) secPending.clear();
+    scheduleSave();
+    res.json(snapshot());
+  });
+  // 전자비서 목록만 비우기 (후원 명단은 그대로)
+  app.post('/api/roulette/secretary/clear', async (req, res) => {
+    await ensureLoaded();
+    state.secretary.items = [];
+    secPending.clear();
     await saveNow();
     res.json(snapshot());
   });
@@ -296,4 +375,4 @@ function mount(app) {
   });
 }
 
-module.exports = { mount, resume, multiplierOf, onPacket, _state: () => state };
+module.exports = { mount, resume, multiplierOf, onPacket, _state: () => state, _secOnChat: secOnChat };

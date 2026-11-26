@@ -85,6 +85,8 @@ async function describe(req) {
   if (m === 'POST' && p === '/api/roulette/start') return ['후원 룰렛 수집 시작', short(b.streamer)];
   if (m === 'POST' && p === '/api/roulette/stop') return ['후원 룰렛 수집 중지', ''];
   if (m === 'POST' && p === '/api/roulette/reset') return ['후원 룰렛 명단 초기화', ''];
+  if (m === 'POST' && p === '/api/roulette/secretary') return ['전자비서 수집 설정 변경', (b.on === false ? '끔' : '켬') + (b.windowSec ? ' · ' + b.windowSec + '초' : ''), true];
+  if (m === 'POST' && p === '/api/roulette/secretary/clear') return ['전자비서 목록 비우기', ''];
   if (m === 'POST' && p === '/api/roulette/filter') return ['후원 룰렛 설정 변경', `기준 ${b.unit || 1}개${b.bonus === false ? '' : ' · 보너스'}`, true];
   if (m === 'POST' && p === '/api/banned-words') return ['금지 단어 추가', short(b.word, 30)];
   if (m === 'DELETE' && (x = p.match(/^\/api\/banned-words\/(.+)$/))) return ['금지 단어 빼기', short(decodeURIComponent(x[1]), 30)];
