@@ -229,7 +229,28 @@
   .br-head{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:12px;color:var(--text-dim);padding-bottom:7px;border-bottom:1px solid var(--border);}
   .br-head b{color:var(--text);font-size:13px;}
   .br-bo{color:#7c8cff;font-size:11px;font-weight:600;}
-  .br-m{display:flex;flex-direction:column;gap:3px;}
+  .br-m{display:flex;flex-direction:column;gap:3px;border-radius:8px;}
+  .br-m.click{cursor:pointer;}
+  .br-m.click:hover .br-t{border-color:var(--accent);}
+  .vs-title{text-align:center;}
+  .vs-title p{margin:3px 0 0;font-size:12px;color:var(--text-dim);}
+  .vs-top{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;margin:6px 0 4px;}
+  .vs-team{display:flex;flex-direction:column;align-items:center;gap:7px;min-width:0;}
+  .vs-team b{font-size:15px;text-align:center;word-break:break-all;}
+  .vs-logo{width:58px;height:58px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:17px;}
+  .vs-mid{display:flex;flex-direction:column;align-items:center;gap:2px;}
+  .vs-vs{font-size:34px;font-weight:900;font-style:italic;letter-spacing:-1px;}
+  .vs-score{font-size:15px;font-weight:800;color:var(--accent);}
+  .vs-cols{display:grid;grid-template-columns:minmax(0,1fr) 1px minmax(0,1fr);gap:12px;}
+  .vs-line{background:var(--border);}
+  .vs-col{display:flex;flex-direction:column;gap:7px;}
+  .vs-p{display:flex;align-items:center;gap:8px;border:1px solid var(--border);background:var(--surface-2);border-radius:10px;padding:7px 9px;min-width:0;}
+  .vs-role{flex:none;font-size:11.5px;color:var(--text-dim);background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:2px 8px;min-width:38px;text-align:center;}
+  .vs-av{flex:none;width:26px;height:26px;border-radius:50%;object-fit:cover;background:var(--surface);display:inline-block;}
+  .vs-nick{flex:0 1 auto;min-width:0;font-weight:700;font-size:13.5px;color:inherit;text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .vs-nick:hover{color:var(--accent);}
+  .vs-lead{flex:none;font-size:14px;}
+  @media (max-width:520px){ .vs-p{padding:6px 7px;gap:6px;} .vs-role{min-width:32px;padding:2px 5px;} .vs-logo{width:46px;height:46px;font-size:14px;} .vs-vs{font-size:26px;} }
   .br-ml{font-size:11.5px;color:var(--text-dim);text-align:center;}
   .br-ml b{color:var(--text);}
   .br-end{font-size:10.5px;color:var(--text-dim);border:1px solid var(--border);border-radius:5px;padding:0 4px;}
@@ -412,6 +433,10 @@
   // 고른 단계·조는 이 브라우저에 기억. 처음엔 지금 진행 중인 단계(closest)와 조.
   var TOUR = { stage: null, group: null };
   try { var tsv = JSON.parse(localStorage.getItem('tour-pick') || 'null'); if (tsv) TOUR = tsv; } catch(e) {}
+  var TOUR_OPEN = true;
+  try { TOUR_OPEN = localStorage.getItem('tour-open') !== '0'; } catch(e) {}
+  var TOUR_MATCHES = []; // 지금 그린 경기들 (data-k 번호로 찾는다)
+  var TOUR_CTX = '';     // "본선 8강 : A조"
   var TOUR_COLORS = ['#6aa84f','#e04f7a','#e8912d','#3d6ee0','#8e5fd6','#2aa7a0','#d95c3f','#b58b16'];
   function tourColor(name){ var h=0; for (var i=0;i<name.length;i++) h=(h*31+name.charCodeAt(i))|0; return TOUR_COLORS[Math.abs(h)%TOUR_COLORS.length]; }
   function tourShort(name){ var s=String(name||'').replace(/\s+/g,''); return s.slice(-2); }
@@ -447,19 +472,26 @@
       r.matches.map(function(m){
         var teams = m.teams && m.teams.length ? m.teams : [null, null];
         if(teams.length===1) teams=[teams[0], null];
-        return '<div class="br-m">'+
+        var k = TOUR_MATCHES.length;
+        TOUR_MATCHES.push({ m: m, round: tourRoundName(r) });
+        var can = teams[0] && teams[1] && teams[0].id && teams[1].id;
+        return '<div class="br-m'+(can?' click':'')+'"'+(can?' data-action="tour-match" data-k="'+k+'" title="눌러서 대진 상세 (팀원·포지션)"':'')+'>'+
           '<div class="br-ml">'+(m.label?'<b>'+esc(m.label)+'</b> ':'')+esc(tourDate(m.date))+(m.bo?' <span class="br-bo">Bo'+m.bo+'</span>':'')+(m.finish?' <span class="br-end">종료</span>':'')+'</div>'+
           tourTeamHTML(teams[0])+tourTeamHTML(teams[1])+'</div>';
       }).join('')+'</div>';
   }
   function tourHTML(){
     var t = STATE.tournament;
+    TOUR_MATCHES = [];
     var head = function(title, sub){
-      return '<h2 style="font-weight:800;font-size:17px;margin:0 0 3px;">🏆 '+esc(title)+helpBtn('tour')+'</h2>'+
-        '<p class="updated" style="margin:0 0 10px;">'+sub+'</p>'+
+      return '<h2 style="font-weight:800;font-size:17px;margin:0 '+(TOUR_OPEN?'0 3px':'')+';display:flex;align-items:center;gap:6px;">'+
+        '<button type="button" data-action="tour-toggle" style="font:inherit;font-weight:800;background:none;border:none;color:inherit;padding:0;cursor:pointer;text-align:left;">'+(TOUR_OPEN?'▾':'▸')+' 🏆 '+esc(title)+'</button>'+helpBtn('tour')+
+        (TOUR_OPEN?'':'<button type="button" class="btn" data-action="tour-toggle" style="margin-left:auto;padding:4px 10px;font-size:12px;flex:none;">보기</button>')+'</h2>'+
+        (TOUR_OPEN ? '<p class="updated" style="margin:0 0 10px;">'+sub+'</p>' : '')+
         helpText('tour', 'SOOP e스포츠 대회 페이지의 대진표를 5분마다 자동으로 가져와요. 시간은 한국 시간이에요. 다른 대회로 바꾸려면 \'대회 바꾸기\'에 그 대회 페이지 주소를 붙여 넣으세요.');
     };
     var tools = '<button type="button" class="link-like" data-action="tour-refresh">⟳ 새로고침</button> · <button type="button" class="link-like" data-action="tour-change">대회 바꾸기</button>';
+    if(!TOUR_OPEN) return '<section class="card">'+head((t&&t.title)||'대회 대진표','')+'</section>'; // 접혀 있으면 제목 줄만
     if(!t || !t.stages || !t.stages.length){
       return '<section class="card">'+head('대회 대진표', tools)+'<div class="empty">아직 가져온 대진표가 없어요. 잠시 후 다시 보거나 ⟳ 새로고침을 눌러 주세요.</div></section>';
     }
@@ -471,6 +503,7 @@
     if(gi<0) gi = st.groups.findIndex(function(g){ return g.closest; });
     if(gi<0) gi = 0;
     var g = st.groups[gi];
+    TOUR_CTX = st.title + (g ? ' : ' + g.title : '');
     var stagesHTML = '<div class="br-stages">'+t.stages.map(function(s,i){
       return '<button type="button" class="br-stage'+(i===si?' on':'')+'" data-action="tour-stage" data-i="'+i+'">'+esc(s.title)+(s.closest?' <span class="br-now">진행 중</span>':'')+'</button>';
     }).join('')+'</div>';
@@ -488,6 +521,42 @@
     }
     var sub = esc(t.updatedLabel||'')+' · <a href="'+esc(t.url)+'" target="_blank" rel="noopener" style="color:var(--accent)">원문 보기</a> · '+tools;
     return '<section class="card">'+head(t.title||'대회 대진표', sub)+stagesHTML+groupsHTML+body+'</section>';
+  }
+  function tourAvatar(id){
+    if(!id) return '<span class="vs-av"></span>';
+    var u = 'https://profile.img.sooplive.com/LOGO/'+encodeURIComponent(id.slice(0,2))+'/'+encodeURIComponent(id)+'/'+encodeURIComponent(id)+'.jpg';
+    return '<img class="vs-av" src="'+u+'" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.visibility=\'hidden\'">';
+  }
+  function tourMemberHTML(p){
+    return '<div class="vs-p">'+
+      '<span class="vs-role">'+esc(p.role || (p.sub ? '후보' : '-'))+'</span>'+tourAvatar(p.id)+
+      '<a class="vs-nick" href="https://www.sooplive.com/station/'+encodeURIComponent(p.id)+'" target="_blank" rel="noopener" title="'+esc(p.id)+' 방송국">'+esc(p.nick)+'</a>'+
+      (p.leader ? '<span class="vs-lead" title="팀장">🎖️</span>' : '')+'</div>';
+  }
+  async function openTourMatch(k){
+    var x = TOUR_MATCHES[k]; if(!x) return;
+    var a = x.m.teams[0], b = x.m.teams[1];
+    var top = function(t){ return '<div class="vs-team"><span class="vs-logo" style="background:'+tourColor(t.name)+'">'+esc(tourShort(t.name))+'</span><b>'+esc(t.name)+'</b></div>'; };
+    var score = (x.m.finish || (a.score||b.score)) ? '<div class="vs-mid"><span class="vs-vs">VS</span><span class="vs-score">'+(a.score!=null?a.score:'-')+' : '+(b.score!=null?b.score:'-')+'</span></div>' : '<div class="vs-mid"><span class="vs-vs">VS</span></div>';
+    var shell = function(body){
+      return '<div class="vs-title"><h3 style="margin:0">대진 상세</h3><p>'+esc(TOUR_CTX+' : '+x.round)+' · '+esc(tourDate(x.m.date))+(x.m.bo?' · Bo'+x.m.bo:'')+'</p></div>'+
+        '<div class="vs-top">'+top(a)+score+top(b)+'</div>'+body+
+        '<div class="modal-actions"><span></span><button type="button" class="btn" data-action="close-modal">닫기</button></div>';
+    };
+    showModal(shell('<div class="hint" style="text-align:center">팀원 불러오는 중…</div>'), '');
+    document.querySelector('#modal-slot .modal').classList.add('wide');
+    try {
+      var r = await api('GET', '/api/gggl/versus?a='+a.id+'&b='+b.id);
+      var byId = {}; r.teams.forEach(function(t){ byId[t.id] = t; });
+      var col = function(t){ var mem = (byId[t.id] && byId[t.id].members) || []; return '<div class="vs-col">'+(mem.length ? mem.map(tourMemberHTML).join('') : '<div class="hint">팀원 정보가 없어요</div>')+'</div>'; };
+      if(!document.querySelector('#modal-slot .vs-top')) return; // 그새 창을 닫음
+      showModal(shell('<div class="vs-cols">'+col(a)+'<div class="vs-line"></div>'+col(b)+'</div>'), '');
+      document.querySelector('#modal-slot .modal').classList.add('wide');
+    } catch(e) {
+      if(!document.querySelector('#modal-slot .vs-top')) return;
+      showModal(shell('<div class="hint" style="text-align:center;color:var(--danger,#e5484d)">'+esc(e.message)+'</div>'), '');
+      document.querySelector('#modal-slot .modal').classList.add('wide');
+    }
   }
   function tourPick(stage, group){
     TOUR = { stage: stage, group: group };
@@ -1102,6 +1171,8 @@
     if(action==='open-unicode'){ if(window.openUnicodeModal) window.openUnicodeModal(); return; }
     if(action==='open-push'){ if(window.openPushModal) window.openPushModal(); return; }
     if(action==='notices-toggle'){ NOTICE_OPEN=!NOTICE_OPEN; try{ localStorage.setItem('noticesOpen', NOTICE_OPEN?'1':'0'); }catch(e){} stashMemoDraft(); render(); return; }
+    if(action==='tour-toggle'){ TOUR_OPEN=!TOUR_OPEN; try{ localStorage.setItem('tour-open', TOUR_OPEN?'1':'0'); }catch(e){} stashMemoDraft(); render(); return; }
+    if(action==='tour-match'){ openTourMatch(+el.getAttribute('data-k')); return; }
     if(action==='tour-stage'){ var ts=STATE.tournament.stages[+el.getAttribute('data-i')]; if(ts){ tourPick(ts.title, null); stashMemoDraft(); render(); } return; }
     if(action==='tour-group'){ var tst=STATE.tournament.stages.find(function(x){ return x.title===(TOUR.stage||''); }) || STATE.tournament.stages.find(function(x){ return x.closest; }) || STATE.tournament.stages[STATE.tournament.stages.length-1];
       var tg=tst && tst.groups[+el.getAttribute('data-i')]; if(tg){ tourPick(tst.title, tg.title); stashMemoDraft(); render(); } return; }

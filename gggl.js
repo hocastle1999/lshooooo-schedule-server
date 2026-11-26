@@ -44,6 +44,7 @@ function slimMatch(m) {
     bye: Boolean(m.byeYn),
     bo: m.totalMatchCnt || null,
     teams: (m.matchTeamList || []).sort((a, b) => a.sort - b.sort).map((t) => ({
+      id: t.teamIdx || 0, // 대진 상세(팀원) 볼 때 쓴다
       name: t.teamTitle || '',
       score: typeof t.score === 'number' ? t.score : null,
       win: t.status === 1, // 1 승, 2 패, 0 아직
@@ -114,7 +115,35 @@ function start() {
   setInterval(() => refresh('정기 갱신'), EVERY_MS);
 }
 
+// ---- 대진 상세: 두 팀의 팀원과 포지션 (경기를 누를 때만 받아 온다, 10분 동안 다시 씀) ----
+const ROLE_ORDER = ['탑', '정글', '미드', '원딜', '서폿'];
+const versusCache = new Map(); // "a-b" → { at, data }
+async function versus(a, b) {
+  const key = a + '-' + b;
+  const hit = versusCache.get(key);
+  if (hit && Date.now() - hit.at < 10 * 60 * 1000) return hit.data;
+  const raw = await post('participation/team/member/versus/list', { teamIdx: a, versusTeamIdx: b });
+  const data = raw.map((t) => ({
+    id: t.idx,
+    name: t.teamTitle || '',
+    members: (t.members || [])
+      .filter((m) => m.userId || m.userNick)
+      .map((m) => ({ id: m.userId || '', nick: m.userNick || m.userId || '', role: m.role || '', leader: m.gradeType === 'TEAM_LEADER', sub: m.gradeType === 'TRAINEE' }))
+      .sort((x, y) => (ROLE_ORDER.indexOf(x.role) + 1 || 9) - (ROLE_ORDER.indexOf(y.role) + 1 || 9)),
+  }));
+  versusCache.set(key, { at: Date.now(), data });
+  if (versusCache.size > 200) versusCache.delete(versusCache.keys().next().value);
+  return data;
+}
+
 function mount(app) {
+  app.get('/api/gggl/versus', async (req, res) => {
+    const a = parseInt(req.query.a, 10), b = parseInt(req.query.b, 10);
+    if (!(a > 0) || !(b > 0)) return res.status(400).json({ error: '팀 번호가 필요해요' });
+    try { res.json({ teams: await versus(a, b) }); }
+    catch (e) { res.status(502).json({ error: '팀원 정보를 가져오지 못했어요: ' + e.message }); }
+  });
+
   // 대회 바꾸기: 대회 페이지 주소나 번호를 받는다
   app.post('/api/gggl', async (req, res) => {
     const raw = String((req.body || {}).url || '').trim();
