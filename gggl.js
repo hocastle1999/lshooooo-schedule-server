@@ -5,7 +5,8 @@
 //   match/stage {ggglIdx}               → 단계 (예선 1차, 본선 8강 …), closestYn = 지금 진행 중
 //   match/group {ggglIdx, stageIdx}     → 조 (A조, B조 …)
 //   match/round-match {…, groupIdx}     → 라운드별 경기 (exposeSort 양수 = 승자 쪽, 음수 = 패자 쪽)
-// 5분마다 전부 다시 받아 저장한다 (대회 하나에 요청 10여 개). 실패하면 예전 데이터를 그대로 둔다.
+// 경기 있는 날 [첫 경기 10분 전 ~ 마지막 경기 3시간 뒤] 동안만 5분마다 전부 다시 받아 저장한다 (대회 하나에 요청 10여 개).
+// 실패하면 예전 데이터를 그대로 둔다.
 // 대회는 작업실 카드의 '대회 바꾸기'에서 대회 페이지 주소를 붙여 넣어 바꾼다.
 
 const { getState, setState } = require('./store');
@@ -110,9 +111,40 @@ async function refresh(reason) {
   }
 }
 
+// ---- 언제 새로 받을지 ----
+// 경기가 있는 날마다 [그날 첫 경기 10분 전 ~ 그날 마지막 경기 3시간 뒤] 동안만 5분마다 새로 받는다.
+// 그 밖(경기 끝나고 3시간 뒤 ~ 다음 경기일 첫 경기 10분 전)에는 받지 않는다. 카드의 ⟳ 새로고침은 언제든 된다.
+const BEFORE_MS = 10 * 60 * 1000;
+const AFTER_MS = 3 * 60 * 60 * 1000;
+const kstMs = (s) => Date.parse(s.slice(0, 19) + '+09:00'); // 경기 시각은 한국 시간 문자열 ("2026-11-27T19:00:00")
+function matchWindows(data) {
+  const days = new Map(); // "2026-11-27" → { first, last }
+  for (const st of (data && data.stages) || []) for (const g of st.groups || []) for (const r of g.rounds || []) for (const m of r.matches || []) {
+    if (!m.date) continue;
+    const t = kstMs(m.date);
+    if (!Number.isFinite(t)) continue;
+    const day = m.date.slice(0, 10);
+    const d = days.get(day);
+    if (!d) days.set(day, { first: t, last: t });
+    else { d.first = Math.min(d.first, t); d.last = Math.max(d.last, t); }
+  }
+  return [...days.values()].map((d) => ({ from: d.first - BEFORE_MS, to: d.last + AFTER_MS }));
+}
+function inWindow(data, now = Date.now()) {
+  const w = matchWindows(data);
+  if (!w.length) return true; // 경기 시각을 모르면(데이터 없음) 받아 본다
+  return w.some((x) => now >= x.from && now <= x.to);
+}
+
+async function tick(reason) {
+  const cur = await getState(KEY, null).catch(() => null);
+  if (cur && cur.stages && cur.stages.length && !inWindow(cur)) return; // 경기 없는 시간: 쉼
+  await refresh(reason);
+}
+
 function start() {
-  setTimeout(() => refresh('시작'), 20 * 1000);
-  setInterval(() => refresh('정기 갱신'), EVERY_MS);
+  setTimeout(() => tick('시작'), 20 * 1000);
+  setInterval(() => tick('정기 갱신'), EVERY_MS);
 }
 
 // ---- 대진 상세: 두 팀의 팀원과 포지션 (경기를 누를 때만 받아 온다, 10분 동안 다시 씀) ----
@@ -166,4 +198,4 @@ function mount(app) {
   });
 }
 
-module.exports = { mount, start, refresh, KEY };
+module.exports = { mount, start, refresh, KEY, inWindow, matchWindows };
