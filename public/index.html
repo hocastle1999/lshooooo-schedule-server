@@ -43,7 +43,7 @@
   body{font-family:"Gothic A1","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;}
   #app{max-width:1360px;margin:0 auto;padding:20px 16px 48px;display:flex;flex-direction:column;gap:18px;}
   .top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;}
-  .brand{display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;} /* 꽉 채워서 📝 메모장 버튼이 제목 줄 오른쪽 끝에 붙게 */
+  .brand{display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;}
   .brand .eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-weight:700;}
   .brand h1{font-weight:800;font-size:clamp(22px,4vw,30px);margin:0;letter-spacing:-.01em;}
   .title-row{display:flex;align-items:center;gap:8px 10px;flex-wrap:wrap;}
@@ -199,9 +199,6 @@
   .modal{position:relative;}
   .modal-x{position:absolute;top:10px;right:12px;font:inherit;font-size:18px;line-height:1;background:none;border:none;color:var(--text-dim);cursor:pointer;padding:4px 6px;border-radius:8px;z-index:1;}
   .modal-x:hover{color:var(--text);background:var(--surface-2);}
-  .memo-open-btn{margin-left:auto;flex:none;font:inherit;font-size:13.5px;font-weight:800;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:999px;padding:8px 16px;cursor:pointer;box-shadow:var(--shadow);}
-  .memo-open-btn:hover{border-color:var(--accent);color:var(--accent);}
-  .memo-open-btn.on{background:var(--accent);border-color:var(--accent);color:#fff;}
   .memo-panel{position:fixed;top:12px;right:12px;bottom:12px;width:min(460px,calc(100vw - 24px));z-index:15;overflow-y:auto;border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.35);}
   .memo-panel > .card{min-height:100%;box-sizing:border-box;}
   .memo-panel-x, .m-pop-btn{position:absolute;top:14px;right:14px;z-index:2;font:inherit;font-size:12px;font-weight:700;line-height:1.2;border:1px solid var(--border);background:var(--surface-2);color:var(--text-dim);cursor:pointer;padding:5px 10px;border-radius:8px;}
@@ -811,7 +808,7 @@
   try { CAL_FOLD = localStorage.getItem('cal-fold') === '1'; MEMO_FOLD = localStorage.getItem('memo-fold') === '1'; } catch(e) {}
   // 메모장 보는 방법 두 가지 (PC):
   //   원래 자리(오른쪽 칸) — 카드 오른쪽 위 '⧉ 띄워 보기'로 겹쳐 보기 창으로
-  //   겹쳐 보기 창 — 오른쪽 위 '↙ 원래 자리로'(또는 위쪽 📝 메모장 버튼)로 다시 오른쪽 칸으로
+  //   겹쳐 보기 창 — 오른쪽 위 '↙ 원래 자리로'로 다시 오른쪽 칸으로
   // 메모장은 한 곳에만 그린다 (두 곳에 동시에 있으면 입력이 엇갈림).
   function memoBlockHTML(){
     if(isMobile()) return '<div class="m-fold-wrap'+(MEMO_FOLD?' folded':'')+'"><button type="button" class="m-fold-btn" data-action="memo-fold">'+(MEMO_FOLD?'▸ 펼치기':'▾ 접기')+'</button>'+memoHTML()+'</div>';
@@ -844,11 +841,9 @@
           LINKS.map(function(l){ return '<a class="refresh-btn" href="'+esc(l.url)+'" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center;">'+esc(l.label)+'</a>'; }).join('')+
           // ⟳ 공지 새로고침은 '최근 방송 공지' 제목 옆으로 옮김 (sidebarHTML)
         '</div>'+
-        // 📝 메모장: 위쪽 줄 오른쪽 끝 (PC 는 겹쳐 보기 창, 모바일은 화면 안 메모장으로 이동)
-        '<button type="button" class="memo-open-btn'+(MEMO_PANEL&&!isMobile()?' on':'')+'" data-action="memo-panel" title="메모장 열기/닫기">📝 메모장</button>'+
       '</div>'+
       '<div class="layout"><div style="display:flex;flex-direction:column;gap:18px;">'+calendarHTML()+unscheduledHTML()+tourHTML()+'</div><div style="display:flex;flex-direction:column;gap:18px;">'+memoBlockHTML()+filesHTML()+adminHTML()+sidebarHTML()+'</div></div>'+
-      // 📝 메모장은 오른쪽 위 버튼으로 여닫는 겹쳐 보기 창 (열어 둔 채로 다른 칸도 쓸 수 있다)
+      // 📝 메모장 겹쳐 보기 창 (⧉ 띄워 보기로 열고, 열어 둔 채로 다른 칸도 쓸 수 있다)
       memoPanelHTML()+
       '<div id="modal-slot"></div>';
     var btn = document.getElementById('refresh-btn');
