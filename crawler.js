@@ -54,7 +54,10 @@ async function fetchFullContents() {
   for (const it of items) {
     if (it.userId !== 'lshooooo' || !it.titleName || !it.content) continue;
     const text = htmlToText(it.content.content) || it.content.textContent || '';
-    if (text && !map.has(it.titleName.trim())) map.set(it.titleName.trim(), text);
+    // 제목 → { 전체 본문, 게시물 주소 } (원문 보기를 게시판 목록이 아니라 그 게시물로)
+    if (!map.has(it.titleName.trim())) {
+      map.set(it.titleName.trim(), { text, url: it.titleNo ? `https://www.sooplive.com/station/lshooooo/post/${it.titleNo}` : '' });
+    }
   }
   return map;
 }
@@ -196,8 +199,10 @@ async function runCrawl() {
     try {
       const full = await fetchFullContents();
       for (const n of notices) {
-        const t = full.get(n.title.trim());
-        if (t && t.length > n.content.length) n.content = t.slice(0, 5000);
+        const f = full.get(n.title.trim());
+        if (!f) continue;
+        if (f.text && f.text.length > n.content.length) n.content = f.text.slice(0, 5000);
+        if (f.url) n.url = f.url;
       }
     } catch (e) {
       console.error('[crawler] 공지 전체 내용 가져오기 실패:', e.message);
