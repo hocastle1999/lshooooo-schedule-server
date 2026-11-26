@@ -43,7 +43,7 @@
   body{font-family:"Gothic A1","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;}
   #app{max-width:1360px;margin:0 auto;padding:20px 16px 48px;display:flex;flex-direction:column;gap:18px;}
   .top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;}
-  .brand{display:flex;flex-direction:column;gap:4px;}
+  .brand{display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;} /* 꽉 채워서 📝 메모장 버튼이 제목 줄 오른쪽 끝에 붙게 */
   .brand .eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-weight:700;}
   .brand h1{font-weight:800;font-size:clamp(22px,4vw,30px);margin:0;letter-spacing:-.01em;}
   .title-row{display:flex;align-items:center;gap:8px 10px;flex-wrap:wrap;}
@@ -196,6 +196,26 @@
   .modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);width:100%;max-width:380px;padding:18px;display:flex;flex-direction:column;gap:12px;max-height:88vh;overflow-y:auto;}
   .modal h3{margin:0;font-size:16px;}
   .modal.wide{max-width:640px;}
+  .modal{position:relative;}
+  .modal-x{position:absolute;top:10px;right:12px;font:inherit;font-size:18px;line-height:1;background:none;border:none;color:var(--text-dim);cursor:pointer;padding:4px 6px;border-radius:8px;z-index:1;}
+  .modal-x:hover{color:var(--text);background:var(--surface-2);}
+  .memo-open-btn{margin-left:auto;flex:none;font:inherit;font-size:13.5px;font-weight:800;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:999px;padding:8px 16px;cursor:pointer;box-shadow:var(--shadow);}
+  .memo-open-btn:hover{border-color:var(--accent);color:var(--accent);}
+  .memo-open-btn.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .memo-panel{position:fixed;top:12px;right:12px;bottom:12px;width:min(460px,calc(100vw - 24px));z-index:15;overflow-y:auto;border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.35);}
+  .memo-panel > .card{min-height:100%;box-sizing:border-box;}
+  .memo-panel-x{position:absolute;top:12px;right:14px;z-index:2;font:inherit;font-size:18px;line-height:1;background:none;border:none;color:var(--text-dim);cursor:pointer;padding:4px 6px;border-radius:8px;}
+  .memo-panel-x:hover{color:var(--text);background:var(--surface-2);}
+  .cal-fold-btn, .m-fold-btn{display:none;}
+  @media (max-width:600px){
+    .cal-fold-btn{display:inline-flex;font:inherit;font-size:12px;font-weight:700;border:1px solid var(--border);background:var(--surface-2);color:var(--text-dim);border-radius:8px;padding:4px 9px;cursor:pointer;margin-left:6px;}
+    .cal-folded .weekdays, .cal-folded .grid{display:none;}
+    .cal-folded .agenda{margin-top:4px;}
+    .m-fold-wrap{position:relative;}
+    .m-fold-btn{display:inline-flex;position:absolute;top:14px;right:14px;z-index:2;font:inherit;font-size:12px;font-weight:700;border:1px solid var(--border);background:var(--surface-2);color:var(--text-dim);border-radius:8px;padding:4px 9px;cursor:pointer;}
+    .m-fold-wrap.folded .card > :not(h2){display:none;}
+    .m-fold-wrap.folded .card > h2{margin:0 !important;}
+  }
   .rules-text{white-space:pre-wrap;word-break:break-word;font-size:14px;line-height:1.7;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;}
   .rules-edit{min-height:55vh;font:inherit;font-size:14px;line-height:1.6;}
   button.tool-btn{font:inherit;font-size:13px;font-weight:700;cursor:pointer;}
@@ -382,8 +402,9 @@
       return '<button type="button" class="'+cls+'" data-action="open-day" data-key="'+c.key+'">'+
         '<span class="num">'+c.d+bcMark(bc, c.key)+'</span>'+pillsHtml+'</button>';
     }).join('');
-    return '<section class="card">'+
-      '<div class="cal-head"><h2>'+y+'년 '+MONTH_NAMES[m]+'</h2>'+
+    return '<section class="card'+(CAL_FOLD?' cal-folded':'')+'">'+
+      '<div class="cal-head"><div style="display:flex;align-items:center;gap:4px;min-width:0;"><h2>'+y+'년 '+MONTH_NAMES[m]+'</h2>'+
+        '<button type="button" class="cal-fold-btn" data-action="cal-fold">'+(CAL_FOLD?'▸ 펼치기':'▾ 접기')+'</button></div>'+
         '<div class="cal-nav">'+
           '<button type="button" class="today-btn" data-action="goto-today">오늘</button>'+
           '<button type="button" class="icon-btn" data-action="prev-month" aria-label="이전 달">‹</button>'+
@@ -779,6 +800,25 @@
     return '<div class="mgr"><span class="mgr-dot"></span><span class="mgr-count">방송 참여 중 매니저 <b>'+m.list.length+'</b>명</span>'+(chips?'<span class="mgr-chips">'+chips+'</span>':'')+'</div>';
   }
 
+  // 📝 메모장 겹쳐 보기 창 열림 여부 (이 브라우저에 기억)
+  var MEMO_PANEL = false;
+  try { MEMO_PANEL = localStorage.getItem('memo-panel') === '1'; } catch(e) {}
+  // 📱 모바일(폭 600px 이하): 메모장은 겹쳐 보기 창 대신 화면 안에 두고, 달력·메모장을 접을 수 있다
+  var MOBILE_MQ = window.matchMedia ? window.matchMedia('(max-width:600px)') : { matches: false };
+  function isMobile(){ return !!MOBILE_MQ.matches; }
+  var CAL_FOLD = false, MEMO_FOLD = false;
+  try { CAL_FOLD = localStorage.getItem('cal-fold') === '1'; MEMO_FOLD = localStorage.getItem('memo-fold') === '1'; } catch(e) {}
+  function memoBlockHTML(){
+    // 모바일: 화면 안 + 접기 버튼 / PC: 오른쪽 위 버튼으로 여는 겹쳐 보기 창
+    if(isMobile()) return '<div class="m-fold-wrap'+(MEMO_FOLD?' folded':'')+'"><button type="button" class="m-fold-btn" data-action="memo-fold">'+(MEMO_FOLD?'▸ 펼치기':'▾ 접기')+'</button>'+memoHTML()+'</div>';
+    return '';
+  }
+  function memoPanelHTML(){
+    if(isMobile()) return '';
+    return '<aside class="memo-panel"'+(MEMO_PANEL?'':' hidden')+'><button type="button" class="memo-panel-x" data-action="memo-panel" aria-label="메모장 닫기" title="닫기">✕</button>'+memoHTML()+'</aside>';
+  }
+  // 폭이 바뀌어 모바일/PC 가 바뀌면 메모장 자리를 다시 그린다
+  if(MOBILE_MQ.addEventListener) MOBILE_MQ.addEventListener('change', function(){ stashMemoDraft(); render(); });
   function render(){
     document.getElementById('app').innerHTML =
       '<div class="top">'+
@@ -799,8 +839,12 @@
           LINKS.map(function(l){ return '<a class="refresh-btn" href="'+esc(l.url)+'" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center;">'+esc(l.label)+'</a>'; }).join('')+
           // ⟳ 공지 새로고침은 '최근 방송 공지' 제목 옆으로 옮김 (sidebarHTML)
         '</div>'+
+        // 📝 메모장: 위쪽 줄 오른쪽 끝 (PC 는 겹쳐 보기 창, 모바일은 화면 안 메모장으로 이동)
+        '<button type="button" class="memo-open-btn'+(MEMO_PANEL&&!isMobile()?' on':'')+'" data-action="memo-panel" title="메모장 열기/닫기">📝 메모장</button>'+
       '</div>'+
-      '<div class="layout"><div style="display:flex;flex-direction:column;gap:18px;">'+calendarHTML()+unscheduledHTML()+tourHTML()+'</div><div style="display:flex;flex-direction:column;gap:18px;">'+memoHTML()+filesHTML()+adminHTML()+sidebarHTML()+'</div></div>'+
+      '<div class="layout"><div style="display:flex;flex-direction:column;gap:18px;">'+calendarHTML()+unscheduledHTML()+tourHTML()+'</div><div style="display:flex;flex-direction:column;gap:18px;">'+memoBlockHTML()+filesHTML()+adminHTML()+sidebarHTML()+'</div></div>'+
+      // 📝 메모장은 오른쪽 위 버튼으로 여닫는 겹쳐 보기 창 (열어 둔 채로 다른 칸도 쓸 수 있다)
+      memoPanelHTML()+
       '<div id="modal-slot"></div>';
     var btn = document.getElementById('refresh-btn');
     if(btn) btn.disabled = refreshing;
@@ -855,12 +899,12 @@
   function openNotesModal(editing){
     var text = (STATE.patchNotes && STATE.patchNotes.text) || '';
     var inner = editing
-      ? '<h3>📰 패치 노트 수정</h3>'+
+      ? '<button type="button" class="modal-x" data-action="close-modal" aria-label="닫기" title="닫기">✕</button><h3>📰 패치 노트 수정</h3>'+
         '<form id="notes-form" class="field" style="gap:10px;">'+
           '<textarea name="text" class="rules-edit">'+esc(text)+'</textarea>'+
           '<div class="modal-actions"><button type="button" class="btn" data-action="open-notes">취소</button><button type="submit" class="btn primary">저장</button></div>'+
         '</form>'
-      : '<h3>📰 패치 노트</h3>'+
+      : '<button type="button" class="modal-x" data-action="close-modal" aria-label="닫기" title="닫기">✕</button><h3>📰 패치 노트</h3>'+
         (text ? notesViewHTML(text) : '<div class="rules-text"><span style="color:var(--text-dim)">아직 적힌 내용이 없어요. 수정을 눌러 적어주세요.</span></div>')+
         '<div class="modal-actions"><button type="button" class="btn" data-action="close-modal">닫기</button><button type="button" class="btn primary" data-action="edit-notes">수정</button></div>';
     showModal(inner, '');
@@ -1231,6 +1275,13 @@
     if(action==='backup-del'){ if(!confirm('이 백업을 삭제할까요? 삭제하면 이 백업으로는 되돌릴 수 없어요.')) return; api('DELETE','/api/backups/'+encodeURIComponent(el.getAttribute('data-id'))).then(function(r){ ADM.backups=r.list; toast('백업을 삭제했어요'); stashMemoDraft(); render(); }).catch(function(e){ toast('삭제 실패: '+e.message); }); return; }
     if(action==='open-rules'){ openRulesModal(false); return; }
     if(action==='open-notes'){ openNotesModal(false); return; }
+    if(action==='memo-panel' && isMobile()){
+      MEMO_FOLD=false; try{ localStorage.setItem('memo-fold','0'); }catch(e){} stashMemoDraft(); render();
+      var mw=document.querySelector('.m-fold-wrap'); if(mw) mw.scrollIntoView({behavior:'smooth', block:'start'}); return;
+    }
+    if(action==='memo-fold'){ MEMO_FOLD=!MEMO_FOLD; try{ localStorage.setItem('memo-fold', MEMO_FOLD?'1':'0'); }catch(e){} stashMemoDraft(); render(); return; }
+    if(action==='cal-fold'){ CAL_FOLD=!CAL_FOLD; try{ localStorage.setItem('cal-fold', CAL_FOLD?'1':'0'); }catch(e){} stashMemoDraft(); render(); return; }
+    if(action==='memo-panel'){ MEMO_PANEL=!MEMO_PANEL; try{ localStorage.setItem('memo-panel', MEMO_PANEL?'1':'0'); }catch(e){} stashMemoDraft(); render(); return; }
     if(action==='notes-more'){ var nm=document.getElementById('notes-more'); if(nm){ nm.hidden=!nm.hidden; el.textContent = nm.hidden ? el.getAttribute('data-label') : '이전 패치 노트 접기 ▴'; } return; }
     if(action==='edit-notes'){ openNotesModal(true); return; }
     if(action==='edit-rules'){ openRulesModal(true); return; }
