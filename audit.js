@@ -82,6 +82,8 @@ async function describe(req) {
   if (m === 'POST' && p === '/api/sanction-rules') return ['제재 기준 수정', '', true];
   if (m === 'POST' && p === '/api/patch-notes') return ['패치 노트 수정', '', true];
   if (m === 'POST' && p === '/api/refresh') return ['공지 새로고침', '', true];
+  if (m === 'POST' && p === '/api/gggl') return ['대진표 대회 바꾸기', short(b.url, 80)];
+  if (m === 'POST' && p === '/api/gggl/refresh') return ['대진표 새로고침', '', true];
   if (m === 'POST' && p === '/api/roulette/start') return ['후원 룰렛 수집 시작', short(b.streamer)];
   if (m === 'POST' && p === '/api/roulette/stop') return ['후원 룰렛 수집 중지', ''];
   if (m === 'POST' && p === '/api/roulette/reset') return ['후원 룰렛 명단 초기화', ''];

@@ -9,6 +9,7 @@ const auth = require('./auth');
 const audit = require('./audit');
 const backup = require('./backup');
 const push = require('./push');
+const gggl = require('./gggl');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -37,6 +38,7 @@ keepAwake.mount(app);
 roulette.mount(app);
 watch.mount(app);
 push.mount(app); // 🔔 방송 알림 (웹 푸시)
+gggl.mount(app); // 🏆 대회 대진표 (SOOP e스포츠)
 
 // 지금 돌고 있는 버전 (배포 확인용, /deploy-site 가 씀). Render 가 배포한 커밋을 RENDER_GIT_COMMIT 으로 넣어준다.
 const STARTED_AT = Date.now();
@@ -58,7 +60,8 @@ app.get('/api/state', async (req, res) => {
   // files에는 이름/크기/날짜 같은 목록 정보만 있고, 파일 내용 자체는 따로 저장되어 있습니다
   // (20초마다 이 API를 부르기 때문에 파일 내용을 같이 보내면 안 됩니다).
   const patchNotes = await getState('patchNotes', { text: DEFAULT_PATCH_NOTES, updatedAt: 0 });
-  res.json({ events, notices, unscheduled, memos, meta, files, sanctionRules, patchNotes, managers: watch.managers() });
+  const tournament = await getState(gggl.KEY, null);
+  res.json({ events, notices, unscheduled, memos, meta, files, sanctionRules, patchNotes, tournament, managers: watch.managers() });
 });
 
 // ---- 메모장 (여러 페이지) ----
@@ -100,6 +103,7 @@ const DEFAULT_PATCH_NOTES = [
   '',
   '[11월 27일]',
   '- 📝 후원 룰렛: 전자비서 수집 (후원 후 30초 안에 친 첫 채팅을 "닉네임(종류 개수) : 채팅"으로 모으기)',
+  '- 🏆 멸망전 대진표 (날짜 미정 일정 아래, 5분마다 자동 갱신 · 단계·조 선택)',
   '',
   '[11월 23일]',
   '- 🔔 방송 알림 (패치 노트 옆, 기기마다 켜기 · 아이폰은 홈 화면에 추가 후)',
@@ -438,6 +442,7 @@ app.listen(PORT, () => {
   roulette.resume().catch((e) => console.error('[roulette] 복구 실패:', e.message));
   watch.resume().catch((e) => console.error('[watch] 복구 실패:', e.message));
   backup.start({ onRestore: () => watch.reloadWatchlist() });
+  gggl.start(); // 대진표는 5분마다
   // 트래키파이 약관(무단 수집·복제 금지)에 맞춰, 예전에 받아 저장해 둔 트래키파이 데이터를 지운다.
   // 롤 월즈가 끝나서 월즈 일정·결과(worlds)도 지운다.
   for (const k of ['sanctions', 'channelCounts', 'userSummaries', 'broadcasts', 'worlds']) deleteState(k).catch(() => {});
