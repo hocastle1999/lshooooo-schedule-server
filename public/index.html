@@ -124,6 +124,8 @@
   .notice .ndate.approx{color:var(--text-dim);}
   .notice h3{margin:0;font-size:14px;line-height:1.3;}
   .notice p{margin:0;font-size:12.5px;color:var(--text-dim);line-height:1.5;}
+  .notice p.nbody.open{color:var(--text);white-space:pre-wrap;word-break:break-word;}
+  .nmore{align-self:flex-start;font:inherit;font-size:12px;font-weight:700;background:none;border:none;color:var(--accent);padding:0;cursor:pointer;}
   .notice .stats{display:flex;gap:10px;font-size:11px;color:var(--text-dim);}
   .notice .nfoot{display:flex;gap:8px;margin-top:2px;}
   .link-btn,.add-btn{font-size:11.5px;border-radius:7px;padding:5px 9px;border:1px solid var(--border);background:var(--surface);color:var(--text-dim);cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:4px;}
@@ -576,12 +578,23 @@
     '</section>';
   }
 
+  // 공지 본문: 처음엔 앞부분만, '더 보기'를 누르면 전체 (공지마다 따로, 펼친 것은 화면을 다시 그려도 유지)
+  var NOTICE_EXPANDED = {};
+  function noticeKey(n){ return (n.dateKey||'')+'|'+(n.title||''); }
+  function noticeBodyHTML(n){
+    var full = n.content || '';
+    var long = full && full.length > String(n.preview||'').replace(/…$/,'').length;
+    if(!long) return '<p>'+esc(full || n.preview)+'</p>';
+    var open = !!NOTICE_EXPANDED[noticeKey(n)];
+    return '<p class="nbody'+(open?' open':'')+'">'+esc(open ? full : n.preview)+'</p>'+
+      '<button type="button" class="nmore" data-action="notice-more" data-nkey="'+esc(noticeKey(n))+'">'+(open?'접기 ▴':'더 보기 ▾')+'</button>';
+  }
   function noticeCard(n){
     var dateHtml = '<span class="ndate'+(n.approx?' approx':'')+'">'+esc(n.dateLabel)+'</span>';
     return '<article class="notice">'+
       '<div class="nhead">'+dateHtml+'</div>'+
       '<h3>'+esc(n.title)+'</h3>'+
-      '<p>'+esc(n.preview)+'</p>'+
+      noticeBodyHTML(n)+
       '<div class="stats"><span>👍 '+fmtNum(n.likes)+'</span><span>💬 '+fmtNum(n.comments)+'</span><span>👁 '+fmtNum(n.views)+'</span></div>'+
       '<div class="nfoot">'+
         '<a class="link-btn" href="'+esc(n.url)+'" target="_blank" rel="noopener">원문 보기 ↗</a>'+
@@ -1170,6 +1183,16 @@
     if(action==='logout'){ if(confirm('로그아웃할까요?')) api('POST','/api/logout').then(function(){ location.href='/login.html'; }); return; }
     if(action==='open-unicode'){ if(window.openUnicodeModal) window.openUnicodeModal(); return; }
     if(action==='open-push'){ if(window.openPushModal) window.openPushModal(); return; }
+    if(action==='notice-more'){
+      // 화면 전체를 다시 그리지 않고 그 공지만 바꾼다 (공지 목록 스크롤 위치 유지)
+      var nk=el.getAttribute('data-nkey'), nn=STATE.notices.find(function(x){ return noticeKey(x)===nk; });
+      if(!nn) return;
+      NOTICE_EXPANDED[nk]=!NOTICE_EXPANDED[nk];
+      var wrapN=document.createElement('div'); wrapN.innerHTML=noticeBodyHTML(nn);
+      var pN=el.previousElementSibling; if(pN && pN.tagName==='P') pN.replaceWith(wrapN.firstChild);
+      el.replaceWith(wrapN.lastChild);
+      return;
+    }
     if(action==='notices-toggle'){ NOTICE_OPEN=!NOTICE_OPEN; try{ localStorage.setItem('noticesOpen', NOTICE_OPEN?'1':'0'); }catch(e){} stashMemoDraft(); render(); return; }
     if(action==='tour-toggle'){ TOUR_OPEN=!TOUR_OPEN; try{ localStorage.setItem('tour-open', TOUR_OPEN?'1':'0'); }catch(e){} stashMemoDraft(); render(); return; }
     if(action==='tour-match'){ openTourMatch(+el.getAttribute('data-k')); return; }

@@ -29,9 +29,40 @@ function pad(n) {
   return String(n).padStart(2, '0');
 }
 
+// ---- 공지 전체 내용 (방송국 게시판 API) ----
+// 게시판 페이지가 쓰는 공개 API. 첫 페이지(고정 공지 + 최근 글)에서 이상호님이 쓴 글의 제목 → 전체 본문.
+const BOARD_API = 'https://api-channel.sooplive.com/v1.3/channel/lshooooo/board?perPage=20&startDate=&endDate=&field=title,contents,user_nick,user_id,hashtags&keyword=&type=all&orderBy=reg_date&page=1&bbsNo=';
+function htmlToText(html) {
+  return String(html || '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li|h\d)>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/&#(\d+);/g, (m, n) => String.fromCharCode(Number(n)))
+    .replace(/&amp;/g, '&')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+async function fetchFullContents() {
+  const res = await fetch(BOARD_API, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(15000) });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const j = await res.json();
+  const items = [...(Array.isArray(j.noticeData) ? j.noticeData : [j.noticeData]), ...(j.contents || [])].filter(Boolean);
+  const map = new Map();
+  for (const it of items) {
+    if (it.userId !== 'lshooooo' || !it.titleName || !it.content) continue;
+    const text = htmlToText(it.content.content) || it.content.textContent || '';
+    if (text && !map.has(it.titleName.trim())) map.set(it.titleName.trim(), text);
+  }
+  return map;
+}
+
 function todayParts() {
-  const d = new Date();
-  return { y: d.getFullYear(), m: d.getMonth() + 1, d: d.getDate() };
+  // 서버(Render)는 UTC 라서 한국 날짜로 맞춘다 (새벽 0~9시에 '오늘'이 어제로 잡히지 않게)
+  const d = new Date(Date.now() + 9 * 3600 * 1000);
+  return { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1, d: d.getUTCDate() };
 }
 
 // 게시글 블록은 "이상호" -> "- 방 송 공 지-" -> "공지..." 로 시작합니다.
@@ -152,6 +183,7 @@ async function runCrawl() {
         approx,
         title: parsed.title,
         preview: parsed.content.length > 160 ? parsed.content.slice(0, 160) + '…' : parsed.content,
+        content: parsed.content.slice(0, 3000), // 전체 내용 (작업실에서 '더 보기'로 펼친다)
         likes: parsed.likes,
         comments: parsed.comments,
         views: parsed.views,
@@ -159,9 +191,22 @@ async function runCrawl() {
       });
     });
 
-    const now = new Date();
-    const label = `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일 ${pad(now.getHours())}:${pad(
-      now.getMinutes()
+    // 게시판 목록 글은 187자에서 잘려 있어서, 방송국 게시판 API 의 본문(HTML)으로 전체 내용을 채운다.
+    // 실패해도 목록에서 읽은 앞부분은 그대로 둔다.
+    try {
+      const full = await fetchFullContents();
+      for (const n of notices) {
+        const t = full.get(n.title.trim());
+        if (t && t.length > n.content.length) n.content = t.slice(0, 5000);
+      }
+    } catch (e) {
+      console.error('[crawler] 공지 전체 내용 가져오기 실패:', e.message);
+    }
+
+    // Render 서버 시간대는 UTC 라서 한국 시간으로 맞춘다
+    const now = new Date(Date.now() + 9 * 3600 * 1000);
+    const label = `${now.getUTCFullYear()}년 ${now.getUTCMonth() + 1}월 ${now.getUTCDate()}일 ${pad(now.getUTCHours())}:${pad(
+      now.getUTCMinutes()
     )} 기준`;
 
     return {
