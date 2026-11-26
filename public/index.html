@@ -616,7 +616,7 @@
     var list = STATE.notices.length ? STATE.notices.map(noticeCard).join('') : '<div class="empty-notices">아직 크롤링된 공지가 없습니다. 잠시 후 새로고침 해보세요.</div>';
     return '<section class="card side">'+head+
       '<p class="updated">'+esc(STATE.meta.crawledAtLabel)+' · <a href="'+esc(STATE.meta.boardUrl)+'" target="_blank" rel="noopener" style="color:var(--accent)">게시판 원문</a></p>'+
-      helpText('notices', '공지는 '+esc(STATE.meta.streamer)+'님이 방송국 게시판에 직접 올린 글을 그대로 가져온 것입니다. 날짜 표기가 없는 글은 앞뒤 글을 참고한 추정 날짜입니다. 2시간마다 자동으로 다시 가져오고, 제목 옆 ⟳ 새로고침 버튼으로 즉시 갱신할 수 있습니다.')+
+      helpText('notices', '공지는 '+esc(STATE.meta.streamer)+'님이 방송국 게시판에 직접 올린 글을 그대로 가져온 것입니다. 날짜는 글을 올린 시각이에요. 2시간마다 자동으로 다시 가져오고, 제목 옆 ⟳ 새로고침 버튼으로 즉시 갱신할 수 있습니다.')+
       '<div class="notice-list">'+list+'</div>'+
     '</section>';
   }

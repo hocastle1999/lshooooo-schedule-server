@@ -56,7 +56,11 @@ async function fetchFullContents() {
     const text = htmlToText(it.content.content) || it.content.textContent || '';
     // 제목 → { 전체 본문, 게시물 주소 } (원문 보기를 게시판 목록이 아니라 그 게시물로)
     if (!map.has(it.titleName.trim())) {
-      map.set(it.titleName.trim(), { text, url: it.titleNo ? `https://www.sooplive.com/station/lshooooo/post/${it.titleNo}` : '' });
+      map.set(it.titleName.trim(), {
+        text,
+        url: it.titleNo ? `https://www.sooplive.com/station/lshooooo/post/${it.titleNo}` : '',
+        regDate: typeof it.regDate === 'string' ? it.regDate : '', // 올린 시각 (한국 시간, "2026-11-24 15:42:23")
+      });
     }
   }
   return map;
@@ -203,6 +207,14 @@ async function runCrawl() {
         if (!f) continue;
         if (f.text && f.text.length > n.content.length) n.content = f.text.slice(0, 5000);
         if (f.url) n.url = f.url;
+        // 날짜는 추정하지 않고 실제로 올린 시각으로 ("11월 24일 15:42", 오늘이면 "(오늘)")
+        const rd = f.regDate.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+        if (rd) {
+          n.dateKey = `${rd[1]}-${rd[2]}-${rd[3]}`;
+          n.approx = false;
+          n.postedAt = f.regDate;
+          n.dateLabel = `${Number(rd[2])}월 ${Number(rd[3])}일 ${rd[4]}:${rd[5]}` + (n.dateKey === todayKey ? ' (오늘)' : '');
+        }
       }
     } catch (e) {
       console.error('[crawler] 공지 전체 내용 가져오기 실패:', e.message);
