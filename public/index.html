@@ -834,6 +834,24 @@
   }
   // 📋 제재 기준: 누르면 내용을 보여주고, '수정'으로 같은 창에서 고칠 수 있다.
   // 📰 패치 노트: 제재 기준과 같은 방식 (보기 → 수정 → 저장)
+  // 보기 화면: [날짜] 묶음 중 최근 2개만 보이고, 나머지는 '이전 패치 노트 더 보기'로 펼친다 (수정 화면은 전체 그대로)
+  function notesViewHTML(text){
+    var lines = text.split('\n'), head = [], sections = [], cur = null;
+    lines.forEach(function(l){
+      if(/^\s*\[.+\]\s*$/.test(l)){ cur = [l]; sections.push(cur); }
+      else if(cur) cur.push(l);
+      else head.push(l);
+    });
+    var join = function(arr){ return arr.map(function(s){ return s.join('\n').replace(/\s+$/,''); }).join('\n\n'); };
+    var headText = head.join('\n').replace(/\s+$/,'');
+    var shown = (headText ? headText + '\n\n' : '') + join(sections.slice(0, 2));
+    var rest = sections.slice(2);
+    // 묶음([날짜])이 없거나 2개 이하면 전체 그대로
+    if(!rest.length) return '<div class="rules-text">'+esc(text)+'</div>';
+    return '<div class="rules-text">'+esc(shown)+
+        '<div id="notes-more" hidden>\n\n'+esc(join(rest))+'</div></div>'+
+      '<button type="button" class="nmore" data-action="notes-more" data-label="이전 패치 노트 더 보기 ('+rest.length+'개) ▾">이전 패치 노트 더 보기 ('+rest.length+'개) ▾</button>';
+  }
   function openNotesModal(editing){
     var text = (STATE.patchNotes && STATE.patchNotes.text) || '';
     var inner = editing
@@ -843,7 +861,7 @@
           '<div class="modal-actions"><button type="button" class="btn" data-action="open-notes">취소</button><button type="submit" class="btn primary">저장</button></div>'+
         '</form>'
       : '<h3>📰 패치 노트</h3>'+
-        '<div class="rules-text">'+(text ? esc(text) : '<span style="color:var(--text-dim)">아직 적힌 내용이 없어요. 수정을 눌러 적어주세요.</span>')+'</div>'+
+        (text ? notesViewHTML(text) : '<div class="rules-text"><span style="color:var(--text-dim)">아직 적힌 내용이 없어요. 수정을 눌러 적어주세요.</span></div>')+
         '<div class="modal-actions"><button type="button" class="btn" data-action="close-modal">닫기</button><button type="button" class="btn primary" data-action="edit-notes">수정</button></div>';
     showModal(inner, '');
     document.querySelector('#modal-slot .modal').classList.add('wide');
@@ -1213,6 +1231,7 @@
     if(action==='backup-del'){ if(!confirm('이 백업을 삭제할까요? 삭제하면 이 백업으로는 되돌릴 수 없어요.')) return; api('DELETE','/api/backups/'+encodeURIComponent(el.getAttribute('data-id'))).then(function(r){ ADM.backups=r.list; toast('백업을 삭제했어요'); stashMemoDraft(); render(); }).catch(function(e){ toast('삭제 실패: '+e.message); }); return; }
     if(action==='open-rules'){ openRulesModal(false); return; }
     if(action==='open-notes'){ openNotesModal(false); return; }
+    if(action==='notes-more'){ var nm=document.getElementById('notes-more'); if(nm){ nm.hidden=!nm.hidden; el.textContent = nm.hidden ? el.getAttribute('data-label') : '이전 패치 노트 접기 ▴'; } return; }
     if(action==='edit-notes'){ openNotesModal(true); return; }
     if(action==='edit-rules'){ openRulesModal(true); return; }
     if(action==='toggle-help'){ var hk=el.getAttribute('data-key'); helpOpen[hk]=!helpOpen[hk]; stashMemoDraft(); render(); return; }
