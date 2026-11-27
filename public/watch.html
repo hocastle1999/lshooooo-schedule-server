@@ -1081,13 +1081,18 @@
   var wlIds = new Set(), wlSeqSeen = null, wlUnread = 0, wlTimer = null, wlFeed = [];
   var wlSoundOn = false;
   try { wlSoundOn = localStorage.getItem('wl-sound') === '1'; } catch(e) {}
+  // 브라우저 알림 켜기/끄기 (이 브라우저에 기억). 권한을 허용한 뒤에도 여기서 끌 수 있다. 기본은 켜짐.
+  var wlNotifyOn = true;
+  try { wlNotifyOn = localStorage.getItem('wl-notify') !== '0'; } catch(e) {}
   function paintUnread(){ var c = $('wlCnt'); c.hidden = !wlUnread; c.textContent = wlUnread > 99 ? '99+' : wlUnread; }
   function paintOpts(){
     $('wlSound').textContent = wlSoundOn ? '🔊 소리 켜짐' : '🔈 소리 켜기';
     $('wlSound').classList.toggle('on', wlSoundOn);
     var perm = ('Notification' in window) ? Notification.permission : 'unsupported';
-    $('wlNotify').textContent = perm === 'granted' ? '🔔 브라우저 알림 켜짐' : perm === 'denied' ? '🔕 알림이 막혀 있어요 (브라우저 설정)' : perm === 'unsupported' ? '🔕 이 브라우저는 알림을 지원하지 않아요' : '🔔 브라우저 알림 켜기';
-    $('wlNotify').classList.toggle('on', perm === 'granted');
+    var on = perm === 'granted' && wlNotifyOn;
+    $('wlNotify').textContent = perm === 'granted' ? (wlNotifyOn ? '🔔 브라우저 알림 켜짐' : '🔕 브라우저 알림 꺼짐') : perm === 'denied' ? '🔕 알림이 막혀 있어요 (브라우저 설정)' : perm === 'unsupported' ? '🔕 이 브라우저는 알림을 지원하지 않아요' : '🔔 브라우저 알림 켜기';
+    $('wlNotify').classList.toggle('on', on);
+    $('wlNotify').title = perm === 'granted' ? '눌러서 브라우저 알림 ' + (wlNotifyOn ? '끄기' : '켜기') : '';
   }
   function beep(){
     try {
@@ -1147,7 +1152,7 @@
           var a = d.alerts[0];
           toast('⚠️ ' + a.nick + ': ' + a.message.slice(0, 40));
           if (wlSoundOn) beep();
-          if ('Notification' in window && Notification.permission === 'granted' && document.visibilityState !== 'visible') {
+          if (wlNotifyOn && 'Notification' in window && Notification.permission === 'granted' && document.visibilityState !== 'visible') {
             d.alerts.slice(0, 3).forEach(function(x){ try { new Notification('주의 시청자 채팅 · ' + x.nick, { body: x.message, tag: 'wl-' + x.seq }); } catch(e) {} });
           }
         } else if (d.seq < wlSeqSeen) wlSeqSeen = d.seq; // 서버 기록이 처음부터 다시 시작된 경우
@@ -1233,8 +1238,10 @@
     if (wlSoundOn) beep();
   });
   $('wlNotify').addEventListener('click', function(){
-    if (!('Notification' in window) || Notification.permission !== 'default') return;
-    Notification.requestPermission().then(paintOpts);
+    if (!('Notification' in window)) return;
+    var setOn = function(v){ wlNotifyOn = v; try { localStorage.setItem('wl-notify', v ? '1' : '0'); } catch(e) {} paintOpts(); };
+    if (Notification.permission === 'granted') { setOn(!wlNotifyOn); toast(wlNotifyOn ? '🔔 브라우저 알림을 켰어요' : '🔕 브라우저 알림을 껐어요'); return; }
+    if (Notification.permission === 'default') Notification.requestPermission().then(function(p){ setOn(p === 'granted'); });
   });
   // 🔍 창의 ⭐ 버튼
   document.addEventListener('click', async function(e){
