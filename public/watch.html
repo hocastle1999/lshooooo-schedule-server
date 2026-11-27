@@ -178,6 +178,8 @@
   .feed-row .msg{flex:1;}
   .feed-x{flex:none;font:inherit;font-size:13px;line-height:1;background:none;border:none;color:var(--text-dim);cursor:pointer;padding:2px 6px;border-radius:6px;}
   .feed-x:hover{color:var(--danger);background:var(--danger-soft);}
+  .fold-btn{font:inherit;font-weight:inherit;font-size:inherit;background:none;border:none;color:inherit;padding:0;cursor:pointer;display:inline-flex;align-items:center;gap:6px;}
+  .fold-btn .fold-arrow{font-size:13px;color:var(--text-dim);width:12px;}
   .feed-clear{margin-left:auto;font:inherit;font-size:12px;font-weight:700;border:1px solid var(--border);background:var(--surface-2);color:var(--text-dim);border-radius:8px;padding:4px 10px;cursor:pointer;}
   .feed-clear:hover{border-color:var(--danger);color:var(--danger);}
   .hx-watch{font:inherit;font-size:12px;font-weight:700;border:1px solid var(--border);background:var(--surface-2);color:var(--text);border-radius:8px;padding:4px 9px;cursor:pointer;}
@@ -398,7 +400,7 @@
     </section>
 
     <section class="card">
-      <h2>채팅 알림 <span class="badge" id="feedBadge">최근 100개</span><button type="button" class="feed-clear" id="feedClear">전체 지우기</button></h2>
+      <h2><button type="button" class="fold-btn" id="feedFold" aria-expanded="true" title="접기/펼치기"><span class="fold-arrow">▾</span>채팅 알림</button> <span class="badge" id="feedBadge">최근 100개</span><button type="button" class="feed-clear" id="feedClear">전체 지우기</button></h2>
       <div class="feed" id="wlFeed"><div class="vempty">아직 알림이 없어요.</div></div>
     </section>
   </div>
@@ -1206,6 +1208,15 @@
       renderFeed();
     } catch(err) { toast('지우기 실패: ' + err.message); }
   });
+  // 채팅 알림 접기/펼치기 (이 브라우저에 기억). 접어도 새 알림은 계속 받고, 탭 숫자·소리·브라우저 알림은 그대로.
+  function setFeedOpen(open){
+    $('wlFeed').hidden = !open;
+    $('feedFold').setAttribute('aria-expanded', open ? 'true' : 'false');
+    $('feedFold').querySelector('.fold-arrow').textContent = open ? '▾' : '▸';
+    try { localStorage.setItem('feed-open', open ? '1' : '0'); } catch(e) {}
+  }
+  $('feedFold').addEventListener('click', function(){ setFeedOpen($('wlFeed').hidden); });
+  (function(){ var open = true; try { open = localStorage.getItem('feed-open') !== '0'; } catch(e) {} setFeedOpen(open); })();
   $('feedClear').addEventListener('click', async function(){
     if (!confirm('채팅 알림을 모두 지울까요? 다른 매니저 화면에서도 지워져요.')) return;
     try {
